@@ -219,6 +219,12 @@ enum JsonBody {
         dst: String,
         data_b64: String,
     },
+    Sqlite {
+        api: &'static str,
+        db_handle: u64,
+        sql_total_bytes: Option<u32>,
+        sql: String,
+    },
 }
 
 fn serialise(ev: &DecodedEvent) -> Vec<u8> {
@@ -318,6 +324,24 @@ fn serialise(ev: &DecodedEvent) -> Vec<u8> {
                 src: fmt_sockaddr(&d.src.0, d.src.1),
                 dst: fmt_sockaddr(&d.dst.0, d.dst.1),
                 data_b64: base64_encode(&d.data),
+            },
+        }),
+        DecodedEvent::Sqlite(ctx, s) => serde_json::to_vec(&JsonEvent {
+            ts_ns: ctx.ts_ns,
+            ts_wall_ms: wall_ms,
+            kind: "sqlite",
+            pid: ctx.pid,
+            tgid: ctx.tgid,
+            uid: ctx.uid,
+            gid: ctx.gid,
+            cgroup_id: ctx.cgroup_id,
+            comm: &ctx.comm,
+            cpu: ctx.cpu,
+            body: JsonBody::Sqlite {
+                api: s.api.label(),
+                db_handle: s.db_handle,
+                sql_total_bytes: s.sql_total_bytes,
+                sql: s.sql.clone(),
             },
         }),
     }

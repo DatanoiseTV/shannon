@@ -178,6 +178,12 @@ and legacy chat.
 | NFS / ONC-RPC | Record-marker framing; NFSv3 / MOUNT / PORTMAP / NLM program + procedure decode |
 | WireGuard | HandshakeInit / Response / CookieReply / TransportData; ephemeral-key preview |
 
+### Library uprobes (local, not on the wire)
+
+| Library | Hook |
+|---|---|
+| libsqlite3 | `sqlite3_prepare_v2` + `sqlite3_exec` — full SQL text + db handle |
+
 ### TLS runtimes lifted for plaintext
 
 | Runtime | Hook |

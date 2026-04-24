@@ -69,6 +69,10 @@ pub enum EventKind {
     ProcExec = 6,
     /// A process exited.
     ProcExit = 7,
+    /// A SQL statement observed via libsqlite3 uprobe
+    /// (`sqlite3_prepare_v2` / `sqlite3_exec`). Plaintext SQL text
+    /// follows the fixed header.
+    SqliteQuery = 8,
     /// Free-form diagnostic from the BPF side (debug builds only).
     KernelLog = 127,
 }
@@ -85,6 +89,7 @@ impl EventKind {
             2 => Some(Self::ConnEnd),
             3 => Some(Self::TcpData),
             4 => Some(Self::TlsData),
+            8 => Some(Self::SqliteQuery),
             5 => Some(Self::DnsMsg),
             6 => Some(Self::ProcExec),
             7 => Some(Self::ProcExit),
@@ -322,6 +327,31 @@ pub struct TlsDataHeader {
     pub captured_len: u32,
     pub _pad2: u32,
 }
+
+// --- Payload: SQLite query --------------------------------------------------
+
+/// Fixed portion of a [`EventKind::SqliteQuery`] payload. Followed by
+/// `captured_len` UTF-8 bytes of SQL text (truncated at
+/// [`SQLITE_TEXT_CAP`]).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SqliteHeader {
+    /// 1 = sqlite3_prepare_v2, 2 = sqlite3_exec.
+    pub api: u8,
+    pub _pad: [u8; 3],
+    /// Opaque sqlite3* pointer — stable for the lifetime of one open
+    /// database handle on one process.
+    pub db_handle: u64,
+    /// SQL text length the call originally passed (may be -1 for
+    /// "unknown / NUL-terminated"). When -1 this lands as `u32::MAX`.
+    pub sql_total_bytes: u32,
+    pub captured_len: u32,
+}
+
+/// Maximum SQL text we capture per event.
+// Kept at 1 KiB to stay well inside the verifier's complexity budget
+// for uprobe programs; SQL statements longer than this are truncated.
+pub const SQLITE_TEXT_CAP: usize = 1024;
 
 // --- Payload: DNS -----------------------------------------------------------
 

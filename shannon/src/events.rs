@@ -10,7 +10,7 @@ use anyhow::{bail, Context, Result};
 
 use shannon_common::{
     ConnEndPayload, ConnStartPayload, DnsHeader, EventKind, HEADER_SIZE,
-    L4Protocol, TcpDataHeader, TlsDataHeader, TlsLib, validate,
+    L4Protocol, SqliteHeader, TcpDataHeader, TlsDataHeader, TlsLib, validate,
 };
 
 /// A decoded event ready for consumption by the router / TUI / exporter.
@@ -21,6 +21,32 @@ pub enum DecodedEvent {
     TcpData(Context4, TcpDataInfo),
     TlsData(Context4, TlsDataInfo),
     Dns(Context4, DnsInfo),
+    Sqlite(Context4, SqliteInfo),
+}
+
+#[derive(Debug, Clone)]
+pub struct SqliteInfo {
+    pub api: SqliteApi,
+    pub db_handle: u64,
+    /// Length of the original SQL string passed to the API call;
+    /// `None` when sqlite3_*'s `nByte` was -1 (NUL-terminated).
+    pub sql_total_bytes: Option<u32>,
+    pub sql: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqliteApi {
+    PrepareV2,
+    Exec,
+}
+
+impl SqliteApi {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::PrepareV2 => "prepare_v2",
+            Self::Exec => "exec",
+        }
+    }
 }
 
 /// Per-event common metadata: who did it, when, where (PID/comm/cgroup).
@@ -202,6 +228,38 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedEvent> {
                     src: (ip_from_raw(h.family, &h.saddr)?, h.sport),
                     dst: (ip_from_raw(h.family, &h.daddr)?, h.dport),
                     data: payload[data_start..data_end].to_vec(),
+                },
+            ))
+        }
+        EventKind::SqliteQuery => {
+            let h = read_struct::<SqliteHeader>(payload)?;
+            let data_start = size_of::<SqliteHeader>();
+            let data_end = data_start + h.captured_len as usize;
+            if payload.len() < data_end {
+                bail!("sqlite payload truncated");
+            }
+            let api = match h.api {
+                1 => SqliteApi::PrepareV2,
+                2 => SqliteApi::Exec,
+                other => bail!("unknown sqlite api {other}"),
+            };
+            // sqlite3_exec reads a NUL-terminated string; we may have
+            // captured trailing bytes past the NUL — trim here so
+            // downstream consumers see clean SQL.
+            let raw = &payload[data_start..data_end];
+            let nul = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+            let sql = String::from_utf8_lossy(&raw[..nul]).into_owned();
+            Ok(DecodedEvent::Sqlite(
+                ctx,
+                SqliteInfo {
+                    api,
+                    db_handle: h.db_handle,
+                    sql_total_bytes: if h.sql_total_bytes == u32::MAX {
+                        None
+                    } else {
+                        Some(h.sql_total_bytes)
+                    },
+                    sql,
                 },
             ))
         }

@@ -22,6 +22,7 @@
 pub mod conn;
 pub mod maps;
 pub mod process;
+pub mod sqlite;
 pub mod tcp;
 pub mod tls;
 pub mod udp;
@@ -39,6 +40,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 pub use conn::{inet_sock_set_state, tcp_v4_connect, tcp_v6_connect};
 pub use process::sched_process_fork;
 pub use tcp::{tcp_recvmsg, tcp_recvmsg_ret, tcp_sendmsg};
+pub use sqlite::{sqlite_exec, sqlite_prepare_v2};
 pub use udp::{udp_recvmsg, udp_recvmsg_ret, udp_sendmsg};
 pub use tls::{
     ssl_read, ssl_read_ex, ssl_read_ex_ret, ssl_read_ret, ssl_write, ssl_write_ex,

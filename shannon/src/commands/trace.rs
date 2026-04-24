@@ -207,7 +207,7 @@ fn handle_event(
         DecodedEvent::ConnEnd(ctx, c) => {
             flows.forget(&FlowKey::Tcp { pid: ctx.tgid, sock_id: c.sock_id });
         }
-        DecodedEvent::ConnStart(_, _) | DecodedEvent::Dns(_, _) => {}
+        DecodedEvent::ConnStart(_, _) | DecodedEvent::Dns(_, _) | DecodedEvent::Sqlite(_, _) => {}
     }
     Ok(())
 }
@@ -435,7 +435,38 @@ fn render_event(
             dir_arrow(d.direction),
             fmt_endpoint(dns, &d.dst.0, d.dst.1),
         ),
+        DecodedEvent::Sqlite(ctx, s) => writeln!(
+            out,
+            "{}  SQL    {}  db=0x{:x}  {}: {}",
+            wall_clock(),
+            fmt_proc(containers, ctx.tgid, &ctx.comm, ctx.cgroup_id),
+            s.db_handle,
+            s.api.label(),
+            sql_oneline(&s.sql),
+        ),
     }
+}
+
+/// Collapse newlines + leading whitespace so a multi-line SQL
+/// statement renders as a single trace line.
+fn sql_oneline(sql: &str) -> String {
+    let mut out = String::with_capacity(sql.len());
+    let mut prev_space = false;
+    for c in sql.chars() {
+        if c.is_whitespace() {
+            if !prev_space && !out.is_empty() {
+                out.push(' ');
+                prev_space = true;
+            }
+        } else {
+            out.push(c);
+            prev_space = false;
+        }
+    }
+    if out.ends_with(' ') {
+        out.pop();
+    }
+    out
 }
 
 fn fmt_proc(containers: &ContainerResolver, tgid: u32, comm: &str, cgroup_id: u64) -> String {

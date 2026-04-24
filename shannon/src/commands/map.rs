@@ -104,7 +104,7 @@ fn absorb(map: &mut ServiceMap, flows: &mut FlowTable, dns: &DnsCache, ev: &Deco
             // reflected in the edge. Just annotate last-seen.
             map.end_hint(ctx.tgid, c.sock_id);
         }
-        DecodedEvent::Dns(_, _) => {}
+        DecodedEvent::Dns(_, _) | DecodedEvent::Sqlite(_, _) => {}
     }
 }
 

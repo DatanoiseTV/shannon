@@ -260,6 +260,18 @@ fn classify(ev: &DecodedEvent) -> (Option<LogLine>, Option<&'static str>) {
             }),
             Some("dns"),
         ),
+        DecodedEvent::Sqlite(ctx, s) => (
+            Some(LogLine {
+                proto: "sql ",
+                dir_arrow: "→",
+                text: format!(
+                    "pid={} comm={}  db=0x{:x}  {}: {}",
+                    ctx.tgid, trunc(&ctx.comm, 15),
+                    s.db_handle, s.api.label(), trunc(&s.sql, 80),
+                ),
+            }),
+            Some("sql"),
+        ),
         DecodedEvent::TcpData(_, _) | DecodedEvent::TlsData(_, _) => (None, None),
     }
 }

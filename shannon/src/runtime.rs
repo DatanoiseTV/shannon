@@ -114,6 +114,18 @@ impl Runtime {
             }
         }
 
+        // libsqlite3: same pattern — attach to dynamic library
+        // installations. Statically-linked sqlite (Python, sqlite3 CLI,
+        // app bundles) is a follow-up via per-binary symbol scan.
+        for libsqlite in libsqlite3_candidates() {
+            if let Err(err) = attach_libsqlite3(&mut bpf, &libsqlite) {
+                tracing::warn!(path = %libsqlite.display(), %err,
+                    "skipping libsqlite3 uprobes");
+            } else {
+                tracing::info!(path = %libsqlite.display(), "attached libsqlite3 uprobes");
+            }
+        }
+
         // Spin up the ring-buffer reader.
         let (tx, rx) = mpsc::channel::<DecodedEvent>(4096);
         spawn_ringbuf_reader(&mut bpf, tx)?;
@@ -235,6 +247,39 @@ fn attach_libssl(bpf: &mut Ebpf, path: &std::path::Path) -> Result<()> {
         ("ssl_read_ex_ret", "SSL_read_ex", true),
     ] {
         attach_uprobe(bpf, program, symbol, path, ret)?;
+    }
+    Ok(())
+}
+
+/// Common installed paths for libsqlite3. Same dedup-by-canonical
+/// approach as libssl since `/lib` and `/usr/lib` are symlinks on
+/// every modern distro.
+fn libsqlite3_candidates() -> Vec<std::path::PathBuf> {
+    use std::collections::BTreeSet;
+    use std::path::PathBuf;
+    let mut seen: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut out = Vec::new();
+    for raw in [
+        "/lib/x86_64-linux-gnu/libsqlite3.so.0",
+        "/usr/lib/x86_64-linux-gnu/libsqlite3.so.0",
+        "/usr/lib64/libsqlite3.so.0",
+        "/lib64/libsqlite3.so.0",
+    ] {
+        let p = PathBuf::from(raw);
+        let Ok(canon) = p.canonicalize() else { continue };
+        if seen.insert(canon.clone()) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+fn attach_libsqlite3(bpf: &mut Ebpf, path: &std::path::Path) -> Result<()> {
+    for (program, symbol) in [
+        ("sqlite_prepare_v2", "sqlite3_prepare_v2"),
+        ("sqlite_exec", "sqlite3_exec"),
+    ] {
+        attach_uprobe(bpf, program, symbol, path, false)?;
     }
     Ok(())
 }
