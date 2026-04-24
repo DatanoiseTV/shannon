@@ -131,7 +131,10 @@ impl SmppParser {
             password_present,
             system_type,
         };
-        SmppParserOutput::Record { record: rec, consumed: length as usize }
+        SmppParserOutput::Record {
+            record: rec,
+            consumed: length as usize,
+        }
     }
 }
 
@@ -148,7 +151,11 @@ fn decode_bind(body: &[u8]) -> (Option<String>, bool, Option<String>) {
     let system_id = it.next().map(|s| s.to_string());
     let password = it.next();
     let system_type = it.next().map(|s| s.to_string());
-    (system_id, password.map(|s| !s.is_empty()).unwrap_or(false), system_type)
+    (
+        system_id,
+        password.map(|s| !s.is_empty()).unwrap_or(false),
+        system_type,
+    )
 }
 
 fn split_cstrings(mut buf: &[u8]) -> impl Iterator<Item = &str> {
@@ -158,7 +165,11 @@ fn split_cstrings(mut buf: &[u8]) -> impl Iterator<Item = &str> {
         }
         let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
         let s = std::str::from_utf8(&buf[..end]).unwrap_or("");
-        buf = if end < buf.len() { &buf[end + 1..] } else { &[][..] };
+        buf = if end < buf.len() {
+            &buf[end + 1..]
+        } else {
+            &[][..]
+        };
         Some(s)
     })
 }
@@ -166,8 +177,24 @@ fn split_cstrings(mut buf: &[u8]) -> impl Iterator<Item = &str> {
 const fn is_known_command(c: u32) -> bool {
     matches!(
         c,
-        0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 | 0x08 | 0x09 | 0x0b | 0x0f | 0x15 | 0x21
-            | 0x22 | 0x23 | 0x103 | 0x111 | 0x112 | 0x113
+        0x01 | 0x02
+            | 0x03
+            | 0x04
+            | 0x05
+            | 0x06
+            | 0x07
+            | 0x08
+            | 0x09
+            | 0x0b
+            | 0x0f
+            | 0x15
+            | 0x21
+            | 0x22
+            | 0x23
+            | 0x103
+            | 0x111
+            | 0x112
+            | 0x113
     )
 }
 
@@ -265,12 +292,18 @@ mod tests {
         while padded.len() < HEADER {
             padded.push(0);
         }
-        assert!(matches!(p.parse(&padded, Direction::Tx), SmppParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&padded, Direction::Tx),
+            SmppParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn short_needs_more() {
         let mut p = SmppParser::default();
-        assert!(matches!(p.parse(&[0u8; 4], Direction::Tx), SmppParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 4], Direction::Tx),
+            SmppParserOutput::Need
+        ));
     }
 }

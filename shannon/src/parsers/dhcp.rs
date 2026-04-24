@@ -70,9 +70,16 @@ impl DhcpRecord {
             "dhcp {} {} mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} yiaddr={}.{}.{}.{}{hn}{vc}",
             self.op_name,
             self.msg_type_name,
-            self.chaddr[0], self.chaddr[1], self.chaddr[2],
-            self.chaddr[3], self.chaddr[4], self.chaddr[5],
-            self.yiaddr[0], self.yiaddr[1], self.yiaddr[2], self.yiaddr[3],
+            self.chaddr[0],
+            self.chaddr[1],
+            self.chaddr[2],
+            self.chaddr[3],
+            self.chaddr[4],
+            self.chaddr[5],
+            self.yiaddr[0],
+            self.yiaddr[1],
+            self.yiaddr[2],
+            self.yiaddr[3],
         )
     }
 }
@@ -215,12 +222,18 @@ mod tests {
     fn non_dhcp_bypasses() {
         let mut p = DhcpParser::default();
         let buf = vec![0u8; MIN_HEADER]; // op=0 is invalid
-        assert!(matches!(p.parse(&buf, Direction::Tx), DhcpParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&buf, Direction::Tx),
+            DhcpParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn short_needs_more() {
         let mut p = DhcpParser::default();
-        assert!(matches!(p.parse(&[0u8; 100], Direction::Tx), DhcpParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 100], Direction::Tx),
+            DhcpParserOutput::Need
+        ));
     }
 }

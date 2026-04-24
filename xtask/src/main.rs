@@ -9,7 +9,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -95,7 +95,10 @@ fn workspace_root() -> Result<PathBuf> {
         .output()
         .context("running `cargo locate-project`")?;
     if !out.status.success() {
-        bail!("cargo locate-project failed: {}", String::from_utf8_lossy(&out.stderr));
+        bail!(
+            "cargo locate-project failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
     let toml = String::from_utf8(out.stdout).context("non-utf8 cargo output")?;
     let root = Path::new(toml.trim())
@@ -178,13 +181,7 @@ fn cmd_lint() -> Result<()> {
     let root = workspace_root()?;
     let host_status = Command::new(cargo_cmd())
         .current_dir(&root)
-        .args([
-            "clippy",
-            "--workspace",
-            "--all-targets",
-            "--",
-            "-Dwarnings",
-        ])
+        .args(["clippy", "--workspace", "--all-targets", "--", "-Dwarnings"])
         .status()?;
     check_status("clippy (userspace)", host_status)?;
     let ebpf_status = Command::new(cargo_cmd())
@@ -222,7 +219,11 @@ fn cmd_fmt(check: bool) -> Result<()> {
 }
 
 fn cmd_run(args: &RunArgs) -> Result<()> {
-    cmd_build(&BuildArgs { release: args.release, ebpf_only: false, userspace_only: false })?;
+    cmd_build(&BuildArgs {
+        release: args.release,
+        ebpf_only: false,
+        userspace_only: false,
+    })?;
     let root = workspace_root()?;
     let bin = root
         .join("target")

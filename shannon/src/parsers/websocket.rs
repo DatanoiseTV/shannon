@@ -91,7 +91,10 @@ pub struct WsRecord {
 pub enum WsRecordKind {
     Text,
     Binary,
-    Close { code: u16, reason: String },
+    Close {
+        code: u16,
+        reason: String,
+    },
     Ping,
     Pong,
     /// Orphan continuation frame with no in-progress message — normally
@@ -135,8 +138,7 @@ impl WsRecord {
                     format!("{side} WS TEXT len={} {}", self.payload_len, preview)
                 },
                 |sio| {
-                    let mut s =
-                        format!("{side} WS TEXT eio={}", sio.engineio_type);
+                    let mut s = format!("{side} WS TEXT eio={}", sio.engineio_type);
                     if let Some(sio_type) = sio.socketio_type {
                         let _ = write!(s, " sio={sio_type}");
                     }
@@ -217,7 +219,10 @@ struct Fragment {
 
 impl Default for WebSocketParser {
     fn default() -> Self {
-        Self { state: State::Framing, frag: None }
+        Self {
+            state: State::Framing,
+            frag: None,
+        }
     }
 }
 
@@ -266,8 +271,7 @@ impl WebSocketParser {
                 if buf.len() < cursor + 2 {
                     return WsParserOutput::Need;
                 }
-                let n =
-                    u64::from(u16::from_be_bytes([buf[cursor], buf[cursor + 1]]));
+                let n = u64::from(u16::from_be_bytes([buf[cursor], buf[cursor + 1]]));
                 cursor += 2;
                 n
             }
@@ -324,8 +328,7 @@ impl WebSocketParser {
 
         // Reserved opcodes (non-control 0x3-0x7, control 0xB-0xF).
         match opcode {
-            OP_CONTINUATION | OP_TEXT | OP_BINARY | OP_CLOSE | OP_PING
-            | OP_PONG => {}
+            OP_CONTINUATION | OP_TEXT | OP_BINARY | OP_CLOSE | OP_PING | OP_PONG => {}
             _ => return WsParserOutput::Skip(frame_total),
         }
 
@@ -368,7 +371,10 @@ impl WebSocketParser {
                     if opcode == OP_TEXT {
                         record.socketio = decode_socketio(&record.payload);
                     }
-                    WsParserOutput::Record { record, consumed: frame_total }
+                    WsParserOutput::Record {
+                        record,
+                        consumed: frame_total,
+                    }
                 } else {
                     self.frag = Some(Fragment {
                         opcode,
@@ -408,7 +414,10 @@ impl WebSocketParser {
                         if frag.opcode == OP_TEXT {
                             record.socketio = decode_socketio(&record.payload);
                         }
-                        WsParserOutput::Record { record, consumed: frame_total }
+                        WsParserOutput::Record {
+                            record,
+                            consumed: frame_total,
+                        }
                     } else {
                         WsParserOutput::Skip(frame_total)
                     }
@@ -425,7 +434,10 @@ impl WebSocketParser {
                         payload: cap,
                         socketio: None,
                     };
-                    WsParserOutput::Record { record, consumed: frame_total }
+                    WsParserOutput::Record {
+                        record,
+                        consumed: frame_total,
+                    }
                 }
             }
             OP_CLOSE => {
@@ -440,7 +452,10 @@ impl WebSocketParser {
                     payload: cap,
                     socketio: None,
                 };
-                WsParserOutput::Record { record, consumed: frame_total }
+                WsParserOutput::Record {
+                    record,
+                    consumed: frame_total,
+                }
             }
             OP_PING => WsParserOutput::Record {
                 record: WsRecord {
@@ -542,14 +557,19 @@ fn truncate_text(payload: &[u8], max: usize) -> String {
 /// Decode a Text payload as an Engine.IO / Socket.IO packet. Returns
 /// `None` if the payload doesn't start with an Engine.IO type digit.
 fn decode_socketio(payload: &[u8]) -> Option<SocketIoInfo> {
-    let Ok(s) = std::str::from_utf8(payload) else { return None };
+    let Ok(s) = std::str::from_utf8(payload) else {
+        return None;
+    };
     let mut chars = s.chars();
     let first = chars.next()?;
     if !('0'..='6').contains(&first) {
         return None;
     }
     let engineio_type = (first as u8) - b'0';
-    let mut info = SocketIoInfo { engineio_type, ..SocketIoInfo::default() };
+    let mut info = SocketIoInfo {
+        engineio_type,
+        ..SocketIoInfo::default()
+    };
 
     // Only Engine.IO MESSAGE (type 4) carries a Socket.IO packet.
     if engineio_type != 4 {
@@ -591,8 +611,9 @@ fn decode_socketio(payload: &[u8]) -> Option<SocketIoInfo> {
         // Namespace runs until ',' (then we consume the comma) or until
         // the start of the ack / JSON payload (then we leave the delimiter
         // alone for the next step to re-examine).
-        if let Some(delim_rel) =
-            bytes[idx..].iter().position(|&b| b == b',' || b == b'[' || b == b'{')
+        if let Some(delim_rel) = bytes[idx..]
+            .iter()
+            .position(|&b| b == b',' || b == b'[' || b == b'{')
         {
             let end = idx + delim_rel;
             let ns = &rest[idx..end];
@@ -627,23 +648,20 @@ fn decode_socketio(payload: &[u8]) -> Option<SocketIoInfo> {
                     if let Some(name) = first.as_str() {
                         // EVENT / BINARY_EVENT: first string is event name.
                         if matches!(info.socketio_type, Some(2 | 5)) {
-                            info.event_name =
-                                Some(truncate_chars(name, MAX_REASON));
+                            info.event_name = Some(truncate_chars(name, MAX_REASON));
                         }
                     }
                 }
                 // Serialize the remaining args. For EVENT / BINARY_EVENT we
                 // drop the name element; for ACK / others we keep all.
-                let args: Vec<&serde_json::Value> =
-                    if matches!(info.socketio_type, Some(2 | 5))
-                        && arr.first().is_some_and(serde_json::Value::is_string)
-                    {
-                        arr.iter().skip(1).collect()
-                    } else {
-                        arr.iter().collect()
-                    };
-                let rendered = serde_json::to_string(&args)
-                    .unwrap_or_else(|_| "[]".to_string());
+                let args: Vec<&serde_json::Value> = if matches!(info.socketio_type, Some(2 | 5))
+                    && arr.first().is_some_and(serde_json::Value::is_string)
+                {
+                    arr.iter().skip(1).collect()
+                } else {
+                    arr.iter().collect()
+                };
+                let rendered = serde_json::to_string(&args).unwrap_or_else(|_| "[]".to_string());
                 info.args_json = Some(truncate_chars(&rendered, MAX_ARGS_JSON));
             }
         }
@@ -802,8 +820,7 @@ mod tests {
     #[test]
     fn socketio_event_frame() {
         let mut p = WebSocketParser::default();
-        let frame =
-            unmasked_frame(OP_TEXT, true, b"42/chat,5[\"msg\",\"hello\"]");
+        let frame = unmasked_frame(OP_TEXT, true, b"42/chat,5[\"msg\",\"hello\"]");
         match p.parse(&frame, Direction::Rx) {
             WsParserOutput::Record { record, .. } => {
                 let sio = record.socketio.expect("socketio info");

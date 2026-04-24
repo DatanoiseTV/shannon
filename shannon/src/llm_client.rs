@@ -65,7 +65,9 @@ fn probe(base: &str) -> Option<String> {
     // GET /models — the OpenAI-compat spec requires it, every backend
     // implements it. Short timeout: we're only probing.
     let url = format!("{}/models", base.trim_end_matches('/'));
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_millis(400)).build();
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_millis(400))
+        .build();
     let resp = agent.get(&url).call().ok()?;
     let text = resp.into_string().ok()?;
     let v: Value = serde_json::from_str(&text).ok()?;
@@ -127,9 +129,7 @@ impl LlmClient {
             body["tool_choice"] = serde_json::json!("auto");
         }
 
-        let agent = ureq::AgentBuilder::new()
-            .timeout(self.timeout)
-            .build();
+        let agent = ureq::AgentBuilder::new().timeout(self.timeout).build();
         let mut req = agent.post(&url).set("Content-Type", "application/json");
         if let Some(ref key) = self.api_key {
             req = req.set("Authorization", &format!("Bearer {key}"));

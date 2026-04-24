@@ -54,10 +54,7 @@ impl RtspRecord {
             RtspKind::Request { method, uri } => format!("{method} {uri}"),
             RtspKind::Response { code, reason } => format!("{code} {reason}"),
         };
-        let cseq = self
-            .cseq
-            .map(|n| format!(" cseq={n}"))
-            .unwrap_or_default();
+        let cseq = self.cseq.map(|n| format!(" cseq={n}")).unwrap_or_default();
         let sess = self
             .session
             .as_deref()
@@ -99,7 +96,9 @@ impl RtspParser {
                 return RtspParserOutput::Skip(buf.len());
             }
         };
-        let mut lines = header_str.split(|c| c == '\r' || c == '\n').filter(|l| !l.is_empty());
+        let mut lines = header_str
+            .split(|c| c == '\r' || c == '\n')
+            .filter(|l| !l.is_empty());
         let start_line = match lines.next() {
             Some(l) => l,
             None => {
@@ -148,7 +147,10 @@ impl RtspParser {
             user_agent,
             content_length,
         };
-        RtspParserOutput::Record { record: rec, consumed: total }
+        RtspParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
@@ -178,7 +180,10 @@ fn parse_start(line: &str) -> Option<RtspKind> {
     if !is_rtsp_method(method) {
         return None;
     }
-    Some(RtspKind::Request { method: method.to_string(), uri: uri.to_string() })
+    Some(RtspKind::Request {
+        method: method.to_string(),
+        uri: uri.to_string(),
+    })
 }
 
 fn is_rtsp_method(m: &str) -> bool {
@@ -271,6 +276,9 @@ mod tests {
     #[test]
     fn partial_returns_need() {
         let mut p = RtspParser::default();
-        assert!(matches!(p.parse(b"OPTIONS rtsp://", Direction::Tx), RtspParserOutput::Need));
+        assert!(matches!(
+            p.parse(b"OPTIONS rtsp://", Direction::Tx),
+            RtspParserOutput::Need
+        ));
     }
 }

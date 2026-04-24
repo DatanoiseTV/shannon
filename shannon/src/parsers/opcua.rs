@@ -36,7 +36,10 @@ pub struct OpcuaParser {
 
 pub enum OpcuaParserOutput {
     Need,
-    Record { record: OpcuaRecord, consumed: usize },
+    Record {
+        record: OpcuaRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -95,9 +98,7 @@ impl OpcuaRecord {
             MessageType::OpenSecureChannel => "OPN".to_string(),
             MessageType::CloseSecureChannel => "CLO".to_string(),
             MessageType::Message => "MSG".to_string(),
-            MessageType::Other(b) => {
-                String::from_utf8_lossy(b).into_owned()
-            }
+            MessageType::Other(b) => String::from_utf8_lossy(b).into_owned(),
         };
         let ct = match self.chunk_type {
             ChunkType::Final => "F",
@@ -106,13 +107,13 @@ impl OpcuaRecord {
             ChunkType::Other(_) => "?",
         };
         let extra = if let Some(h) = &self.hello_info {
-            format!("  v{} endpoint={}", h.protocol_version, truncate(&h.endpoint_url, 80))
-        } else if let Some(e) = &self.err_info {
             format!(
-                "  err=0x{:08x} reason={}",
-                e.error,
-                truncate(&e.reason, 80)
+                "  v{} endpoint={}",
+                h.protocol_version,
+                truncate(&h.endpoint_url, 80)
             )
+        } else if let Some(e) = &self.err_info {
+            format!("  err=0x{:08x} reason={}", e.error, truncate(&e.reason, 80))
         } else {
             String::new()
         };
@@ -121,7 +122,11 @@ impl OpcuaRecord {
 }
 
 fn truncate(s: &str, n: usize) -> &str {
-    if s.len() <= n { s } else { &s[..n] }
+    if s.len() <= n {
+        s
+    } else {
+        &s[..n]
+    }
 }
 
 impl OpcuaParser {
@@ -133,11 +138,7 @@ impl OpcuaParser {
             return OpcuaParserOutput::Need;
         }
         let mt = parse_message_type(&buf[..3]);
-        if matches!(
-            mt,
-            MessageType::Other(_)
-        ) && !is_possible_message_type(&buf[..3])
-        {
+        if matches!(mt, MessageType::Other(_)) && !is_possible_message_type(&buf[..3]) {
             self.bypass = true;
             return OpcuaParserOutput::Skip(buf.len());
         }
@@ -153,12 +154,14 @@ impl OpcuaParser {
         }
         let body = &buf[HEADER..size_usize];
         let hello_info = match mt {
-            MessageType::Hello | MessageType::Ack | MessageType::ReverseHello => {
-                parse_hello(body)
-            }
+            MessageType::Hello | MessageType::Ack | MessageType::ReverseHello => parse_hello(body),
             _ => None,
         };
-        let err_info = if matches!(mt, MessageType::Err) { parse_err(body) } else { None };
+        let err_info = if matches!(mt, MessageType::Err) {
+            parse_err(body)
+        } else {
+            None
+        };
         OpcuaParserOutput::Record {
             record: OpcuaRecord {
                 direction: dir,
@@ -219,7 +222,10 @@ fn parse_hello(body: &[u8]) -> Option<HelloInfo> {
     let version = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
     let after_fixed = &body[20..];
     let endpoint_url = parse_opcua_string(after_fixed).unwrap_or_default();
-    Some(HelloInfo { protocol_version: version, endpoint_url })
+    Some(HelloInfo {
+        protocol_version: version,
+        endpoint_url,
+    })
 }
 
 /// Err body layout:
@@ -295,6 +301,9 @@ mod tests {
     #[test]
     fn partial_returns_need() {
         let mut p = OpcuaParser::default();
-        assert!(matches!(p.parse(b"HELF\x00", Direction::Tx), OpcuaParserOutput::Need));
+        assert!(matches!(
+            p.parse(b"HELF\x00", Direction::Tx),
+            OpcuaParserOutput::Need
+        ));
     }
 }

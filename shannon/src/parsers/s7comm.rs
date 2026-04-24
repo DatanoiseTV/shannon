@@ -137,7 +137,10 @@ impl S7Parser {
                 param_len: 0,
                 data_len: 0,
             };
-            return S7ParserOutput::Record { record: rec, consumed: total };
+            return S7ParserOutput::Record {
+                record: rec,
+                consumed: total,
+            };
         }
         let s7 = &rest[cotp_len + 1..];
         if s7.is_empty() || s7[0] != S7_MAGIC {
@@ -179,7 +182,10 @@ impl S7Parser {
             param_len,
             data_len,
         };
-        S7ParserOutput::Record { record: rec, consumed: total }
+        S7ParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
@@ -257,6 +263,9 @@ mod tests {
     #[test]
     fn partial_returns_need() {
         let mut p = S7Parser::default();
-        assert!(matches!(p.parse(&[0x03, 0x00], Direction::Tx), S7ParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0x03, 0x00], Direction::Tx),
+            S7ParserOutput::Need
+        ));
     }
 }

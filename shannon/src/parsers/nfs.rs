@@ -84,11 +84,17 @@ impl NfsRecord {
                 "nfs CALL xid={:08x} {}(v{}) {}({})",
                 self.xid, program_name, program_version, procedure_name, procedure,
             ),
-            NfsKind::Reply { accepted: true, accept_state_name, .. } => format!(
+            NfsKind::Reply {
+                accepted: true,
+                accept_state_name,
+                ..
+            } => format!(
                 "nfs REPLY xid={:08x} accepted {}",
                 self.xid, accept_state_name,
             ),
-            NfsKind::Reply { accepted: false, .. } => {
+            NfsKind::Reply {
+                accepted: false, ..
+            } => {
                 format!("nfs REPLY xid={:08x} denied", self.xid)
             }
         }
@@ -130,7 +136,11 @@ impl NfsParser {
         };
         match rec {
             Some(rec) => NfsParserOutput::Record {
-                record: NfsRecord { direction: dir, xid, kind: rec },
+                record: NfsRecord {
+                    direction: dir,
+                    xid,
+                    kind: rec,
+                },
                 consumed: total,
             },
             None => {
@@ -195,7 +205,10 @@ fn decode_reply(_xid: u32, body: &[u8]) -> Option<NfsKind> {
         });
     }
     let accept_state = u32::from_be_bytes([
-        body[accept_off], body[accept_off + 1], body[accept_off + 2], body[accept_off + 3],
+        body[accept_off],
+        body[accept_off + 1],
+        body[accept_off + 2],
+        body[accept_off + 3],
     ]);
     Some(NfsKind::Reply {
         accepted: true,
@@ -306,7 +319,10 @@ mod tests {
                 assert_eq!(consumed, frame.len());
                 match record.kind {
                     NfsKind::Call {
-                        program_name, program_version, procedure_name, ..
+                        program_name,
+                        program_version,
+                        procedure_name,
+                        ..
                     } => {
                         assert_eq!(program_name, "NFS");
                         assert_eq!(program_version, 3);
@@ -326,7 +342,11 @@ mod tests {
         let mut p = NfsParser::default();
         match p.parse(&frame, Direction::Tx) {
             NfsParserOutput::Record { record, .. } => match record.kind {
-                NfsKind::Call { program_name, procedure_name, .. } => {
+                NfsKind::Call {
+                    program_name,
+                    procedure_name,
+                    ..
+                } => {
                     assert_eq!(program_name, "MOUNT");
                     assert_eq!(procedure_name, "MNT");
                 }
@@ -341,12 +361,18 @@ mod tests {
         let mut p = NfsParser::default();
         // Length 0 is out of range and should bypass.
         let buf = [0x80, 0, 0, 0, 0xff, 0xff, 0xff, 0xff];
-        assert!(matches!(p.parse(&buf, Direction::Tx), NfsParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&buf, Direction::Tx),
+            NfsParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn short_needs_more() {
         let mut p = NfsParser::default();
-        assert!(matches!(p.parse(&[0u8; 2], Direction::Tx), NfsParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 2], Direction::Tx),
+            NfsParserOutput::Need
+        ));
     }
 }

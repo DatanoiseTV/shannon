@@ -51,7 +51,10 @@ impl Default for OracleParser {
 
 pub enum OracleParserOutput {
     Need,
-    Record { record: OracleRecord, consumed: usize },
+    Record {
+        record: OracleRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -144,7 +147,9 @@ impl OracleParser {
     }
 }
 
-fn decode_connect(body: &[u8]) -> (
+fn decode_connect(
+    body: &[u8],
+) -> (
     Option<String>,
     Option<String>,
     Option<String>,
@@ -175,9 +180,10 @@ fn decode_connect(body: &[u8]) -> (
             None => return (None, None, None, None, None, None),
         },
     };
-    let descriptor = std::str::from_utf8(descriptor_bytes)
-        .ok()
-        .map(|s| s.trim_matches(|c: char| c.is_control() || c == '\0').to_string());
+    let descriptor = std::str::from_utf8(descriptor_bytes).ok().map(|s| {
+        s.trim_matches(|c: char| c.is_control() || c == '\0')
+            .to_string()
+    });
 
     let d = descriptor.as_deref().unwrap_or("");
     (
@@ -285,6 +291,9 @@ mod tests {
     #[test]
     fn short_needs_more() {
         let mut p = OracleParser::default();
-        assert!(matches!(p.parse(&[0u8; 4], Direction::Tx), OracleParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 4], Direction::Tx),
+            OracleParserOutput::Need
+        ));
     }
 }

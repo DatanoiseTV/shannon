@@ -162,7 +162,9 @@ fn read_ident(bytes: &[u8], start: usize) -> Option<String> {
         i += 1;
     }
     if i > start {
-        std::str::from_utf8(&bytes[start..i]).ok().map(str::to_string)
+        std::str::from_utf8(&bytes[start..i])
+            .ok()
+            .map(str::to_string)
     } else {
         None
     }

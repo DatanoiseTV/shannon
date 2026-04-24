@@ -25,7 +25,10 @@ impl Default for ModbusParser {
 
 pub enum ModbusParserOutput {
     Need,
-    Record { record: ModbusRecord, consumed: usize },
+    Record {
+        record: ModbusRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -41,26 +44,26 @@ pub struct ModbusRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionCode {
-    ReadCoils,                 // 0x01
-    ReadDiscreteInputs,        // 0x02
-    ReadHoldingRegisters,      // 0x03
-    ReadInputRegisters,        // 0x04
-    WriteSingleCoil,           // 0x05
-    WriteSingleRegister,       // 0x06
-    ReadExceptionStatus,       // 0x07
-    Diagnostics,               // 0x08
-    GetCommEventCounter,       // 0x0B
-    GetCommEventLog,           // 0x0C
-    WriteMultipleCoils,        // 0x0F
-    WriteMultipleRegisters,    // 0x10
-    ReportSlaveId,             // 0x11
-    ReadFileRecord,            // 0x14
-    WriteFileRecord,           // 0x15
-    MaskWriteRegister,         // 0x16
-    ReadWriteMultipleRegisters,// 0x17
-    ReadFifoQueue,             // 0x18
-    EncapsulatedTransport,     // 0x2B
-    Exception(u8),             // 0x80 | original code
+    ReadCoils,                  // 0x01
+    ReadDiscreteInputs,         // 0x02
+    ReadHoldingRegisters,       // 0x03
+    ReadInputRegisters,         // 0x04
+    WriteSingleCoil,            // 0x05
+    WriteSingleRegister,        // 0x06
+    ReadExceptionStatus,        // 0x07
+    Diagnostics,                // 0x08
+    GetCommEventCounter,        // 0x0B
+    GetCommEventLog,            // 0x0C
+    WriteMultipleCoils,         // 0x0F
+    WriteMultipleRegisters,     // 0x10
+    ReportSlaveId,              // 0x11
+    ReadFileRecord,             // 0x14
+    WriteFileRecord,            // 0x15
+    MaskWriteRegister,          // 0x16
+    ReadWriteMultipleRegisters, // 0x17
+    ReadFifoQueue,              // 0x18
+    EncapsulatedTransport,      // 0x2B
+    Exception(u8),              // 0x80 | original code
     Other(u8),
 }
 
@@ -184,7 +187,10 @@ impl ModbusParser {
             kind,
             summary,
         };
-        ModbusParserOutput::Record { record: rec, consumed: adu_total }
+        ModbusParserOutput::Record {
+            record: rec,
+            consumed: adu_total,
+        }
     }
 }
 
@@ -296,7 +302,9 @@ mod tests {
     #[test]
     fn read_holding_registers_request() {
         // tid=1, pid=0, len=6, unit=1, fc=3, addr=0x006B, qty=3.
-        let buf = [0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x01, 0x03, 0x00, 0x6b, 0x00, 0x03];
+        let buf = [
+            0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x01, 0x03, 0x00, 0x6b, 0x00, 0x03,
+        ];
         let mut p = ModbusParser::default();
         match p.parse(&buf, Direction::Tx) {
             ModbusParserOutput::Record { record, consumed } => {
@@ -316,7 +324,10 @@ mod tests {
         let mut p = ModbusParser::default();
         match p.parse(&buf, Direction::Rx) {
             ModbusParserOutput::Record { record, .. } => {
-                assert!(matches!(record.kind, MessageKind::ExceptionResponse { code: 2 }));
+                assert!(matches!(
+                    record.kind,
+                    MessageKind::ExceptionResponse { code: 2 }
+                ));
                 assert_eq!(record.function, FunctionCode::ReadHoldingRegisters);
             }
             _ => panic!(),
@@ -326,14 +337,22 @@ mod tests {
     #[test]
     fn non_zero_protocol_id_bypasses() {
         // pid = 1 (not modbus).
-        let buf = [0x00, 0x01, 0x00, 0x01, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01];
+        let buf = [
+            0x00, 0x01, 0x00, 0x01, 0x00, 0x06, 0x01, 0x03, 0x00, 0x00, 0x00, 0x01,
+        ];
         let mut p = ModbusParser::default();
-        assert!(matches!(p.parse(&buf, Direction::Tx), ModbusParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&buf, Direction::Tx),
+            ModbusParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn short_buffer_needs_more() {
         let mut p = ModbusParser::default();
-        assert!(matches!(p.parse(&[0u8; 5], Direction::Tx), ModbusParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 5], Direction::Tx),
+            ModbusParserOutput::Need
+        ));
     }
 }

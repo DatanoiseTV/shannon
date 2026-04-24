@@ -42,10 +42,10 @@ pub enum Dnp3ParserOutput {
 pub struct Dnp3Record {
     pub direction: Direction,
     pub length: u8,
-    pub dir_bit: bool,     // DIR
-    pub prm: bool,         // PRM (primary message)
-    pub fcb: bool,         // frame count bit
-    pub fcv_or_dfc: bool,  // FCV for primary, DFC for secondary
+    pub dir_bit: bool,    // DIR
+    pub prm: bool,        // PRM (primary message)
+    pub fcb: bool,        // frame count bit
+    pub fcv_or_dfc: bool, // FCV for primary, DFC for secondary
     pub function_code: u8,
     pub function_name: &'static str,
     pub source: u16,
@@ -55,15 +55,14 @@ pub struct Dnp3Record {
 impl Dnp3Record {
     pub fn display_line(&self) -> String {
         let role = if self.prm { "PRI" } else { "SEC" };
-        let dir = if self.dir_bit { "from-master" } else { "to-master" };
+        let dir = if self.dir_bit {
+            "from-master"
+        } else {
+            "to-master"
+        };
         format!(
             "dnp3 {role} {} {:#04x} ({}) src={} dst={} len={}",
-            dir,
-            self.function_code,
-            self.function_name,
-            self.source,
-            self.destination,
-            self.length,
+            dir, self.function_code, self.function_name, self.source, self.destination, self.length,
         )
     }
 }
@@ -167,7 +166,10 @@ mod tests {
     #[test]
     fn short_buffer_needs_more() {
         let mut p = Dnp3Parser::default();
-        assert!(matches!(p.parse(&[0u8; 5], Direction::Tx), Dnp3ParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 5], Direction::Tx),
+            Dnp3ParserOutput::Need
+        ));
     }
 
     #[test]

@@ -56,7 +56,7 @@ pub enum SmtpKind {
     Vrfy,
     Help,
     StartTls,
-    Auth,           // redacted
+    Auth,             // redacted
     AuthContinuation, // redacted base64 line after AUTH LOGIN
     Other(String),
     // server → client
@@ -357,9 +357,18 @@ mod tests {
             }
             _ => panic!(),
         }
-        assert!(matches!(p.parse(b"Subject: hi\r\n", Direction::Tx), SmtpParserOutput::Skip(_)));
-        assert!(matches!(p.parse(b"\r\n", Direction::Tx), SmtpParserOutput::Skip(_)));
-        assert!(matches!(p.parse(b"hello world\r\n", Direction::Tx), SmtpParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(b"Subject: hi\r\n", Direction::Tx),
+            SmtpParserOutput::Skip(_)
+        ));
+        assert!(matches!(
+            p.parse(b"\r\n", Direction::Tx),
+            SmtpParserOutput::Skip(_)
+        ));
+        assert!(matches!(
+            p.parse(b"hello world\r\n", Direction::Tx),
+            SmtpParserOutput::Skip(_)
+        ));
         match p.parse(b".\r\n", Direction::Tx) {
             SmtpParserOutput::Record { record, .. } => {
                 assert_eq!(record.kind, SmtpKind::DataEnd);

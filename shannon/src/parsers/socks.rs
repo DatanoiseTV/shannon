@@ -27,22 +27,28 @@ pub struct SocksParser {
 
 impl Default for SocksParser {
     fn default() -> Self {
-        Self { bypass: false, state: State::Greeting }
+        Self {
+            bypass: false,
+            state: State::Greeting,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 enum State {
-    Greeting,        // first client bytes (deduce v4 vs v5)
-    MethodResponse,  // v5 server's method choice
-    V5Request,       // v5 client's CONNECT/BIND/UDP
-    V5Reply,         // v5 server's reply
+    Greeting,       // first client bytes (deduce v4 vs v5)
+    MethodResponse, // v5 server's method choice
+    V5Request,      // v5 client's CONNECT/BIND/UDP
+    V5Reply,        // v5 server's reply
     Done,
 }
 
 pub enum SocksParserOutput {
     Need,
-    Record { record: SocksRecord, consumed: usize },
+    Record {
+        record: SocksRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -54,11 +60,29 @@ pub struct SocksRecord {
 
 #[derive(Debug, Clone)]
 pub enum SocksKind {
-    V4Connect { command: u8, port: u16, ip: [u8; 4], userid: String, domain: Option<String> },
-    V5Greeting { methods: Vec<u8> },
-    V5MethodResponse { method: u8 },
-    V5Request { command: u8, target: Target, port: u16 },
-    V5Reply { reply: u8, target: Target, port: u16 },
+    V4Connect {
+        command: u8,
+        port: u16,
+        ip: [u8; 4],
+        userid: String,
+        domain: Option<String>,
+    },
+    V5Greeting {
+        methods: Vec<u8>,
+    },
+    V5MethodResponse {
+        method: u8,
+    },
+    V5Request {
+        command: u8,
+        target: Target,
+        port: u16,
+    },
+    V5Reply {
+        reply: u8,
+        target: Target,
+        port: u16,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -85,7 +109,13 @@ impl Target {
 impl SocksRecord {
     pub fn display_line(&self) -> String {
         match &self.kind {
-            SocksKind::V4Connect { command, port, ip, userid, domain } => {
+            SocksKind::V4Connect {
+                command,
+                port,
+                ip,
+                userid,
+                domain,
+            } => {
                 let tgt = match domain {
                     Some(d) => d.clone(),
                     None => format!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3]),
@@ -109,7 +139,11 @@ impl SocksRecord {
             SocksKind::V5MethodResponse { method } => {
                 format!("socks5 method={}", method_name(*method))
             }
-            SocksKind::V5Request { command, target, port } => {
+            SocksKind::V5Request {
+                command,
+                target,
+                port,
+            } => {
                 let cmd = match command {
                     1 => "CONNECT",
                     2 => "BIND",
@@ -118,7 +152,11 @@ impl SocksRecord {
                 };
                 format!("socks5 {cmd} {}:{port}", target.display())
             }
-            SocksKind::V5Reply { reply, target, port } => {
+            SocksKind::V5Reply {
+                reply,
+                target,
+                port,
+            } => {
                 format!(
                     "socks5 reply={} ({}) bnd={}:{port}",
                     reply,
@@ -219,14 +257,24 @@ impl SocksParser {
                 Some(i) => consumed + i,
                 None => return SocksParserOutput::Need,
             };
-            domain = Some(std::str::from_utf8(&buf[consumed..dom_end]).unwrap_or("").to_string());
+            domain = Some(
+                std::str::from_utf8(&buf[consumed..dom_end])
+                    .unwrap_or("")
+                    .to_string(),
+            );
             consumed = dom_end + 1;
         }
         self.state = State::Done;
         SocksParserOutput::Record {
             record: SocksRecord {
                 direction: dir,
-                kind: SocksKind::V4Connect { command, port, ip, userid, domain },
+                kind: SocksKind::V4Connect {
+                    command,
+                    port,
+                    ip,
+                    userid,
+                    domain,
+                },
             },
             consumed,
         }
@@ -300,7 +348,11 @@ impl SocksParser {
         SocksParserOutput::Record {
             record: SocksRecord {
                 direction: dir,
-                kind: SocksKind::V5Request { command, target, port },
+                kind: SocksKind::V5Request {
+                    command,
+                    target,
+                    port,
+                },
             },
             consumed: port_off + 2,
         }
@@ -329,7 +381,11 @@ impl SocksParser {
         SocksParserOutput::Record {
             record: SocksRecord {
                 direction: dir,
-                kind: SocksKind::V5Reply { reply, target, port },
+                kind: SocksKind::V5Reply {
+                    reply,
+                    target,
+                    port,
+                },
             },
             consumed: port_off + 2,
         }
@@ -384,7 +440,13 @@ mod tests {
             SocksParserOutput::Record { record, consumed } => {
                 assert_eq!(consumed, buf.len());
                 match record.kind {
-                    SocksKind::V4Connect { command, port, ip, userid, domain } => {
+                    SocksKind::V4Connect {
+                        command,
+                        port,
+                        ip,
+                        userid,
+                        domain,
+                    } => {
                         assert_eq!(command, 1);
                         assert_eq!(port, 80);
                         assert_eq!(ip, [10, 0, 0, 1]);
@@ -426,7 +488,11 @@ mod tests {
         r.extend_from_slice(&443u16.to_be_bytes());
         match p.parse(&r, Direction::Tx) {
             SocksParserOutput::Record { record, .. } => match record.kind {
-                SocksKind::V5Request { command, target, port } => {
+                SocksKind::V5Request {
+                    command,
+                    target,
+                    port,
+                } => {
                     assert_eq!(command, 1);
                     assert_eq!(port, 443);
                     assert_eq!(target.display(), "example.com");

@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use std::ffi::CStr;
 use std::net::IpAddr;
 use std::sync::{
+    mpsc::{channel, Receiver, Sender},
     Arc,
-    mpsc::{Receiver, Sender, channel},
 };
 
 use parking_lot::Mutex;
@@ -69,7 +69,11 @@ impl DnsCache {
     pub fn lookup(&self, ip: IpAddr) -> Option<Arc<String>> {
         let mut g = self.inner.lock();
         if let Some(name) = g.map.get(&ip).cloned() {
-            if name.is_empty() { None } else { Some(name) }
+            if name.is_empty() {
+                None
+            } else {
+                Some(name)
+            }
         } else {
             // Insert the NEGATIVE placeholder immediately so a later event
             // doesn't re-queue.
@@ -105,7 +109,9 @@ fn reverse_lookup(ip: IpAddr) -> Option<String> {
             let sa = libc::sockaddr_in {
                 sin_family: libc::AF_INET as libc::sa_family_t,
                 sin_port: 0,
-                sin_addr: libc::in_addr { s_addr: u32::from_ne_bytes(octets) },
+                sin_addr: libc::in_addr {
+                    s_addr: u32::from_ne_bytes(octets),
+                },
                 sin_zero: [0; 8],
             };
             // SAFETY: well-formed sockaddr_in + valid out-buffer.
@@ -126,7 +132,9 @@ fn reverse_lookup(ip: IpAddr) -> Option<String> {
                 sin6_family: libc::AF_INET6 as libc::sa_family_t,
                 sin6_port: 0,
                 sin6_flowinfo: 0,
-                sin6_addr: libc::in6_addr { s6_addr: v6.octets() },
+                sin6_addr: libc::in6_addr {
+                    s6_addr: v6.octets(),
+                },
                 sin6_scope_id: 0,
             };
             // SAFETY: well-formed sockaddr_in6 + valid out-buffer.
@@ -149,5 +157,9 @@ fn reverse_lookup(ip: IpAddr) -> Option<String> {
     // SAFETY: getnameinfo null-terminates on success.
     let cstr = unsafe { CStr::from_ptr(host.as_ptr().cast()) };
     let s = cstr.to_str().ok()?.to_string();
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }

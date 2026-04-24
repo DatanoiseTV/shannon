@@ -59,7 +59,8 @@ impl ProtoPool {
     /// Build a pool from a pre-compiled `FileDescriptorSet` (`.pb` file,
     /// produced by `protoc --descriptor_set_out=x.pb --include_imports`).
     pub fn from_descriptor_set(path: &Path) -> Result<Self, ProtoError> {
-        let bytes = fs::read(path).map_err(|e| ProtoError::Io(format!("{}: {e}", path.display())))?;
+        let bytes =
+            fs::read(path).map_err(|e| ProtoError::Io(format!("{}: {e}", path.display())))?;
         let pool = DescriptorPool::decode(bytes.as_slice())
             .map_err(|e| ProtoError::Parse(format!("decode descriptor set: {e}")))?;
         Ok(Self { pool: Some(pool) })
@@ -310,8 +311,7 @@ fn schema_decode(md: &MessageDescriptor, bytes: &[u8]) -> Result<Decoded, ProtoE
     // Append fields present on the wire but absent from the descriptor
     // (forward/backward-compat). We do a cheap schema-less sweep and
     // keep only tags the schema didn't already cover.
-    let known_tags: std::collections::HashSet<u32> =
-        md.fields().map(|fd| fd.number()).collect();
+    let known_tags: std::collections::HashSet<u32> = md.fields().map(|fd| fd.number()).collect();
     if let Ok(schemaless) = parse_message_schemaless(bytes, 0) {
         for f in schemaless {
             if !known_tags.contains(&f.tag) {
@@ -491,7 +491,10 @@ fn read_value<'a>(
             }
             let mut arr = [0u8; 4];
             arr.copy_from_slice(&bytes[..4]);
-            Ok((DecodedValue::U64(u64::from(u32::from_le_bytes(arr))), &bytes[4..]))
+            Ok((
+                DecodedValue::U64(u64::from(u32::from_le_bytes(arr))),
+                &bytes[4..],
+            ))
         }
         WireType::Len => {
             let (len, rest) = read_varint(bytes)?;
@@ -773,8 +776,8 @@ fn collect_proto_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), ProtoEr
     let mut queue: VecDeque<PathBuf> = VecDeque::new();
     queue.push_back(dir.to_path_buf());
     while let Some(cur) = queue.pop_front() {
-        let rd = fs::read_dir(&cur)
-            .map_err(|e| ProtoError::Io(format!("{}: {e}", cur.display())))?;
+        let rd =
+            fs::read_dir(&cur).map_err(|e| ProtoError::Io(format!("{}: {e}", cur.display())))?;
         for entry in rd {
             let entry = entry.map_err(|e| ProtoError::Io(format!("{e}")))?;
             let path = entry.path();
@@ -783,9 +786,7 @@ fn collect_proto_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), ProtoEr
                 .map_err(|e| ProtoError::Io(format!("{}: {e}", path.display())))?;
             if ft.is_dir() {
                 queue.push_back(path);
-            } else if ft.is_file()
-                && path.extension().and_then(|s| s.to_str()) == Some("proto")
-            {
+            } else if ft.is_file() && path.extension().and_then(|s| s.to_str()) == Some("proto") {
                 out.push(path);
             }
         }
@@ -876,7 +877,10 @@ mod tests {
         // Repeated semantics.
         let ok = matches!(
             d.fields[0].value,
-            DecodedValue::Raw(_) | DecodedValue::Message(_) | DecodedValue::Str(_) | DecodedValue::Bytes(_)
+            DecodedValue::Raw(_)
+                | DecodedValue::Message(_)
+                | DecodedValue::Str(_)
+                | DecodedValue::Bytes(_)
         );
         assert!(ok, "unexpected value: {:?}", d.fields[0].value);
     }
@@ -900,11 +904,9 @@ mod tests {
         )
         .unwrap();
 
-        let pool = ProtoPool::from_proto_files(
-            &[PathBuf::from("toy.proto")],
-            &[tmp.path().to_path_buf()],
-        )
-        .expect("compile");
+        let pool =
+            ProtoPool::from_proto_files(&[PathBuf::from("toy.proto")], &[tmp.path().to_path_buf()])
+                .expect("compile");
         let _ = proto_path; // silence unused in this path
         assert!(pool.message_names().iter().any(|n| n == "toy.Ping"));
 

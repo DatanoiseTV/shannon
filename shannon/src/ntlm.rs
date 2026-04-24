@@ -43,10 +43,16 @@ pub struct NtlmFinding {
 pub enum NtlmKind {
     /// Type 1: client → server "what NTLM features do you support?".
     /// We surface the OEM workstation / domain when present.
-    Negotiate { workstation: Option<String>, domain: Option<String> },
+    Negotiate {
+        workstation: Option<String>,
+        domain: Option<String>,
+    },
     /// Type 2: server → client challenge. Carries the 8-byte server
     /// challenge and the target name (the server's NetBIOS name).
-    Challenge { target_name: Option<String>, server_challenge_hex: String },
+    Challenge {
+        target_name: Option<String>,
+        server_challenge_hex: String,
+    },
     /// Type 3: client → server response. Carries username + domain +
     /// workstation in cleartext, plus the LM/NT challenge response
     /// (which is offline-crackable for weak passwords). We surface
@@ -65,16 +71,27 @@ pub enum NtlmKind {
 impl NtlmFinding {
     pub fn display_line(&self) -> String {
         match &self.kind {
-            NtlmKind::Negotiate { workstation, domain } => format!(
+            NtlmKind::Negotiate {
+                workstation,
+                domain,
+            } => format!(
                 "ntlm Type1 Negotiate ws={} dom={}",
                 workstation.as_deref().unwrap_or("-"),
                 domain.as_deref().unwrap_or("-"),
             ),
-            NtlmKind::Challenge { target_name, server_challenge_hex } => format!(
+            NtlmKind::Challenge {
+                target_name,
+                server_challenge_hex,
+            } => format!(
                 "ntlm Type2 Challenge target={} chal={server_challenge_hex}",
                 target_name.as_deref().unwrap_or("-"),
             ),
-            NtlmKind::Authenticate { user, domain, workstation, nt_response_len } => format!(
+            NtlmKind::Authenticate {
+                user,
+                domain,
+                workstation,
+                nt_response_len,
+            } => format!(
                 "ntlm Type3 Authenticate user={}\\\\{} ws={} nt_resp={}B",
                 domain.as_deref().unwrap_or("-"),
                 user.as_deref().unwrap_or("-"),
@@ -124,7 +141,10 @@ fn decode_type1(msg: &[u8]) -> Option<NtlmKind> {
     }
     let domain = read_secbuf_oem(msg, 16);
     let ws = read_secbuf_oem(msg, 24);
-    Some(NtlmKind::Negotiate { workstation: ws, domain })
+    Some(NtlmKind::Negotiate {
+        workstation: ws,
+        domain,
+    })
 }
 
 fn decode_type2(msg: &[u8]) -> Option<NtlmKind> {
@@ -136,7 +156,10 @@ fn decode_type2(msg: &[u8]) -> Option<NtlmKind> {
     let target_name = read_secbuf_unicode(msg, 12);
     let chal = &msg[24..32];
     let chal_hex: String = chal.iter().map(|b| format!("{b:02x}")).collect();
-    Some(NtlmKind::Challenge { target_name, server_challenge_hex: chal_hex })
+    Some(NtlmKind::Challenge {
+        target_name,
+        server_challenge_hex: chal_hex,
+    })
 }
 
 fn decode_type3(msg: &[u8]) -> Option<NtlmKind> {
@@ -181,7 +204,11 @@ fn read_secbuf_unicode(msg: &[u8], field_off: usize) -> Option<String> {
             s.push(ch);
         }
     }
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 /// Same shape, but bytes are ASCII / OEM (used in Type 1).
@@ -220,7 +247,10 @@ mod tests {
     /// a fake 24-byte blob just to give the length field something.
     fn build_type3(user: &str, domain: &str, ws: &str) -> Vec<u8> {
         let user_u: Vec<u8> = user.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
-        let dom_u: Vec<u8> = domain.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+        let dom_u: Vec<u8> = domain
+            .encode_utf16()
+            .flat_map(|c| c.to_le_bytes())
+            .collect();
         let ws_u: Vec<u8> = ws.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
         let nt_resp = vec![0xaau8; 24];
 
@@ -240,9 +270,9 @@ mod tests {
         let ws_len = ws_u.len();
 
         let mut msg = Vec::with_capacity(ws_off + ws_len);
-        msg.extend_from_slice(SIG);                            // 0..8
-        msg.extend_from_slice(&3u32.to_le_bytes());            // 8..12 type=3
-        // 12..20 LmChallengeResponseFields
+        msg.extend_from_slice(SIG); // 0..8
+        msg.extend_from_slice(&3u32.to_le_bytes()); // 8..12 type=3
+                                                    // 12..20 LmChallengeResponseFields
         msg.extend_from_slice(&(lm_len as u16).to_le_bytes());
         msg.extend_from_slice(&(lm_len as u16).to_le_bytes());
         msg.extend_from_slice(&(lm_off as u32).to_le_bytes());
@@ -280,7 +310,12 @@ mod tests {
         let f = classify(&msg).expect("found");
         assert_eq!(f.message_type, 3);
         match f.kind {
-            NtlmKind::Authenticate { user, domain, workstation, nt_response_len } => {
+            NtlmKind::Authenticate {
+                user,
+                domain,
+                workstation,
+                nt_response_len,
+            } => {
                 assert_eq!(user.as_deref(), Some("alice"));
                 assert_eq!(domain.as_deref(), Some("EVILCORP"));
                 assert_eq!(workstation.as_deref(), Some("LAPTOP01"));
@@ -307,7 +342,10 @@ mod tests {
         msg.extend_from_slice(&[0u8; 16]);
         let f = classify(&msg).expect("found");
         match f.kind {
-            NtlmKind::Challenge { server_challenge_hex, .. } => {
+            NtlmKind::Challenge {
+                server_challenge_hex,
+                ..
+            } => {
                 assert_eq!(server_challenge_hex, "0123456789abcdef");
             }
             _ => panic!(),

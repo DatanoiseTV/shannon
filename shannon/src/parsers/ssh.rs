@@ -23,7 +23,9 @@ pub struct SshParser {
 
 impl Default for SshParser {
     fn default() -> Self {
-        Self { state: State::SeekingBanner(0) }
+        Self {
+            state: State::SeekingBanner(0),
+        }
     }
 }
 
@@ -42,7 +44,7 @@ pub enum SshParserOutput {
 #[derive(Debug, Clone)]
 pub struct SshRecord {
     pub direction: Direction,
-    pub proto_version: String,   // e.g. "2.0"
+    pub proto_version: String,    // e.g. "2.0"
     pub software_version: String, // e.g. "OpenSSH_9.6p1"
     pub comments: Option<String>,
 }
@@ -58,7 +60,10 @@ impl SshRecord {
             .as_deref()
             .map(|s| format!(" [{s}]"))
             .unwrap_or_default();
-        format!("{via} proto={} software={}{c}", self.proto_version, self.software_version)
+        format!(
+            "{via} proto={} software={}{c}",
+            self.proto_version, self.software_version
+        )
     }
 }
 
@@ -80,7 +85,11 @@ impl SshParser {
         };
         // Ensure line is plausibly ASCII.
         let line_with_crlf_end = eol + 1;
-        let end = if eol > 0 && buf[eol - 1] == b'\r' { eol - 1 } else { eol };
+        let end = if eol > 0 && buf[eol - 1] == b'\r' {
+            eol - 1
+        } else {
+            eol
+        };
         let line = &buf[..end];
         if !line.is_ascii() {
             self.state = State::Bypass;
@@ -180,12 +189,18 @@ mod tests {
         for _ in 0..(MAX_PRELUDE_LINES + 1) {
             let _ = p.parse(b"garbage\r\n", Direction::Rx);
         }
-        assert!(matches!(p.parse(b"SSH-2.0-x\r\n", Direction::Rx), SshParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(b"SSH-2.0-x\r\n", Direction::Rx),
+            SshParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn partial_returns_need() {
         let mut p = SshParser::default();
-        assert!(matches!(p.parse(b"SSH-2.0", Direction::Rx), SshParserOutput::Need));
+        assert!(matches!(
+            p.parse(b"SSH-2.0", Direction::Rx),
+            SshParserOutput::Need
+        ));
     }
 }

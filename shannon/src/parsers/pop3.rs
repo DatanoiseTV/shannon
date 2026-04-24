@@ -39,8 +39,8 @@ pub struct Pop3Record {
 pub enum Pop3Kind {
     // client → server
     User,
-    Pass,  // credential — args redacted
-    Apop,  // credential — args redacted
+    Pass, // credential — args redacted
+    Apop, // credential — args redacted
     Quit,
     Stat,
     List,
@@ -87,7 +87,11 @@ impl Pop3Record {
 }
 
 fn maybe_arg(a: &[String]) -> String {
-    if a.is_empty() { String::new() } else { format!(" {}", a.join(" ")) }
+    if a.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", a.join(" "))
+    }
 }
 
 impl Pop3Parser {
@@ -138,7 +142,10 @@ fn parse_command(line: &str, consumed: usize) -> Pop3ParserOutput {
     let args: Vec<String> = if rest.is_empty() {
         Vec::new()
     } else {
-        rest.split(' ').map(str::to_string).map(|s| truncate_to(s, MAX_ARG)).collect()
+        rest.split(' ')
+            .map(str::to_string)
+            .map(|s| truncate_to(s, MAX_ARG))
+            .collect()
     };
 
     let kind = match verb.as_str() {
@@ -170,7 +177,12 @@ fn parse_command(line: &str, consumed: usize) -> Pop3ParserOutput {
     };
 
     Pop3ParserOutput::Record {
-        record: Pop3Record { direction: Direction::Tx, kind, args, text: String::new() },
+        record: Pop3Record {
+            direction: Direction::Tx,
+            kind,
+            args,
+            text: String::new(),
+        },
         consumed,
     }
 }
@@ -197,7 +209,12 @@ impl Pop3Parser {
             self.in_multiline = true;
         }
         Pop3ParserOutput::Record {
-            record: Pop3Record { direction: Direction::Rx, kind, args: Vec::new(), text },
+            record: Pop3Record {
+                direction: Direction::Rx,
+                kind,
+                args: Vec::new(),
+                text,
+            },
             consumed,
         }
     }
@@ -307,7 +324,10 @@ mod tests {
     fn non_ascii_bypasses() {
         let mut p = Pop3Parser::default();
         let buf = b"\xff\xfe\x00\x01junk\r\n";
-        assert!(matches!(p.parse(buf, Direction::Tx), Pop3ParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(buf, Direction::Tx),
+            Pop3ParserOutput::Skip(_)
+        ));
         // And stays bypassed.
         assert!(matches!(
             p.parse(b"USER alice\r\n", Direction::Tx),
@@ -318,6 +338,9 @@ mod tests {
     #[test]
     fn partial_line_needs_more() {
         let mut p = Pop3Parser::default();
-        assert!(matches!(p.parse(b"STAT", Direction::Tx), Pop3ParserOutput::Need));
+        assert!(matches!(
+            p.parse(b"STAT", Direction::Tx),
+            Pop3ParserOutput::Need
+        ));
     }
 }

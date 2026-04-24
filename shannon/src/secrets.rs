@@ -814,7 +814,11 @@ mod tests {
 
     #[test]
     fn github_personal_token() {
-        let input = fx(&[b"token=", b"gh", b"p_1234567890abcdefghij1234567890abcdef trailing"]);
+        let input = fx(&[
+            b"token=",
+            b"gh",
+            b"p_1234567890abcdefghij1234567890abcdef trailing",
+        ]);
         let input = input.as_slice();
         let f = scan(input);
         assert_eq!(f.len(), 1, "expected single finding, got {f:?}");
@@ -869,9 +873,12 @@ mod tests {
         const PL: &[u8] = b"pk_li";
         const ST: &[u8] = b"sk_te";
         let mut input = Vec::new();
-        input.extend_from_slice(SL); input.extend_from_slice(b"ve_ZZfAkeFixtureFixtureFixture  ");
-        input.extend_from_slice(PL); input.extend_from_slice(b"ve_ZZfAkeFixtureFixtureFixture  ");
-        input.extend_from_slice(ST); input.extend_from_slice(b"st_ZZfAkeFixtureFixtureFixture");
+        input.extend_from_slice(SL);
+        input.extend_from_slice(b"ve_ZZfAkeFixtureFixtureFixture  ");
+        input.extend_from_slice(PL);
+        input.extend_from_slice(b"ve_ZZfAkeFixtureFixtureFixture  ");
+        input.extend_from_slice(ST);
+        input.extend_from_slice(b"st_ZZfAkeFixtureFixtureFixture");
         let input = input.as_slice();
         let f = scan(input);
         let ks = kinds(&f);
@@ -884,9 +891,11 @@ mod tests {
     fn twilio_keys() {
         // Test fixtures — prefix split from body.
         let mut input = Vec::new();
-        input.extend_from_slice(b"S"); input.extend_from_slice(b"K");
+        input.extend_from_slice(b"S");
+        input.extend_from_slice(b"K");
         input.extend_from_slice(b"ffffffffffffffffffffffffffffffff ");
-        input.extend_from_slice(b"A"); input.extend_from_slice(b"C");
+        input.extend_from_slice(b"A");
+        input.extend_from_slice(b"C");
         input.extend_from_slice(b"ffffffffffffffffffffffffffffffff");
         let input = input.as_slice();
         let f = scan(input);
@@ -899,11 +908,15 @@ mod tests {
     fn sendgrid_and_mailgun() {
         // Test fixtures — prefix split from body.
         let mut sg_buf = Vec::new();
-        sg_buf.extend_from_slice(b"S"); sg_buf.extend_from_slice(b"G");
-        sg_buf.extend_from_slice(b".ZZzzZZzzZZzzZZzzZZzzZZ.ZZzzZZzzZZzzZZzzZZzzZZzzZZzzZZzzZZzzZZzzZZz");
+        sg_buf.extend_from_slice(b"S");
+        sg_buf.extend_from_slice(b"G");
+        sg_buf.extend_from_slice(
+            b".ZZzzZZzzZZzzZZzzZZzzZZ.ZZzzZZzzZZzzZZzzZZzzZZzzZZzzZZzzZZzzZZzzZZz",
+        );
         let sg = sg_buf.as_slice();
         let mut mg_buf = Vec::new();
-        mg_buf.extend_from_slice(b"ke"); mg_buf.extend_from_slice(b"y-");
+        mg_buf.extend_from_slice(b"ke");
+        mg_buf.extend_from_slice(b"y-");
         mg_buf.extend_from_slice(b"ffffffffffffffffffffffffffffffff");
         let mg = mg_buf.as_slice();
         assert!(scan(sg)
@@ -946,9 +959,8 @@ mod tests {
         let xai = fx(&[b"xa", b"i-", &[b'a'; 80]]);
         let r8 = fx(&[b"r8", b"_", &[b'a'; 37]]);
 
-        let kinds_of = |b: &[u8]| -> Vec<SecretKind> {
-            scan(b).into_iter().map(|f| f.kind).collect()
-        };
+        let kinds_of =
+            |b: &[u8]| -> Vec<SecretKind> { scan(b).into_iter().map(|f| f.kind).collect() };
         assert!(kinds_of(&google).contains(&SecretKind::GoogleAiApiKey));
         assert!(kinds_of(&groq).contains(&SecretKind::GroqApiKey));
         assert!(kinds_of(&pplx).contains(&SecretKind::PerplexityApiKey));
@@ -964,9 +976,7 @@ mod tests {
         let oat = fx(&[b"sk-", b"ant-oat01-", &[b'a'; 70]]);
         let admin = fx(&[b"sk-", b"ant-admin01-", &[b'a'; 70]]);
         let api = fx(&[b"sk-", b"ant-api03-", &[b'a'; 95]]);
-        let kinds = |b: &[u8]| -> Vec<SecretKind> {
-            scan(b).into_iter().map(|f| f.kind).collect()
-        };
+        let kinds = |b: &[u8]| -> Vec<SecretKind> { scan(b).into_iter().map(|f| f.kind).collect() };
         assert!(kinds(&oat).contains(&SecretKind::AnthropicOauthToken));
         // OAuth must not also be matched as the API03 catalogue.
         assert!(!kinds(&oat).contains(&SecretKind::AnthropicApiKey));
@@ -1054,7 +1064,11 @@ mod tests {
 
     #[test]
     fn redact_replaces_with_kind_label() {
-        let input = fx(&[b"before ", b"gh", b"p_1234567890abcdefghij1234567890abcdef after"]);
+        let input = fx(&[
+            b"before ",
+            b"gh",
+            b"p_1234567890abcdefghij1234567890abcdef after",
+        ]);
         let out = redact(&input);
         let s = String::from_utf8(out).expect("ascii");
         assert_eq!(s, "before [github_personal_token] after");
@@ -1063,9 +1077,11 @@ mod tests {
     #[test]
     fn redact_multiple_findings_in_order() {
         let input = fx(&[
-            b"A", b"K",
+            b"A",
+            b"K",
             b"IAIOSFODNN7EXAMPLE and ",
-            b"gh", b"p_1234567890abcdefghij1234567890abcdef",
+            b"gh",
+            b"p_1234567890abcdefghij1234567890abcdef",
         ]);
         let out = redact(&input);
         let s = String::from_utf8(out).expect("ascii");

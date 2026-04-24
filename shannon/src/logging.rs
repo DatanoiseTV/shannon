@@ -5,7 +5,7 @@ use std::fs::OpenOptions;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 /// Initialise the global tracing subscriber.
 ///
@@ -30,7 +30,9 @@ pub fn init(verbose: u8, quiet: bool, log_file: Option<&Path>) -> Result<()> {
         .with_target(false)
         .with_ansi(atty::is(atty::Stream::Stderr));
 
-    let registry = tracing_subscriber::registry().with(filter).with(stderr_layer);
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(stderr_layer);
 
     if let Some(path) = log_file {
         let file = OpenOptions::new()
@@ -38,10 +40,18 @@ pub fn init(verbose: u8, quiet: bool, log_file: Option<&Path>) -> Result<()> {
             .append(true)
             .open(path)
             .with_context(|| format!("opening log file {}", path.display()))?;
-        let json_layer = fmt::layer().json().with_writer(file).with_current_span(true);
-        registry.with(json_layer).try_init().context("installing tracing subscriber")?;
+        let json_layer = fmt::layer()
+            .json()
+            .with_writer(file)
+            .with_current_span(true);
+        registry
+            .with(json_layer)
+            .try_init()
+            .context("installing tracing subscriber")?;
     } else {
-        registry.try_init().context("installing tracing subscriber")?;
+        registry
+            .try_init()
+            .context("installing tracing subscriber")?;
     }
     Ok(())
 }

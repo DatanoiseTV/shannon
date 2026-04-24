@@ -251,7 +251,11 @@ impl NatsParser {
         let tokens = tokenize(rest);
         let (subject, reply_to, bytes) = match tokens.len() {
             2 => (tokens[0].clone(), None, tokens[1].clone()),
-            3 => (tokens[0].clone(), Some(tokens[1].clone()), tokens[2].clone()),
+            3 => (
+                tokens[0].clone(),
+                Some(tokens[1].clone()),
+                tokens[2].clone(),
+            ),
             _ => {
                 self.bypass = true;
                 return NatsParserOutput::Skip(full.len());
@@ -298,7 +302,12 @@ impl NatsParser {
         //   <headers>\r\n\r\n<payload>\r\n
         let tokens = tokenize(rest);
         let (subject, reply_to, hdr_bytes, total_bytes) = match tokens.len() {
-            3 => (tokens[0].clone(), None, tokens[1].clone(), tokens[2].clone()),
+            3 => (
+                tokens[0].clone(),
+                None,
+                tokens[1].clone(),
+                tokens[2].clone(),
+            ),
             4 => (
                 tokens[0].clone(),
                 Some(tokens[1].clone()),
@@ -314,10 +323,7 @@ impl NatsParser {
             self.bypass = true;
             return NatsParserOutput::Skip(full.len());
         };
-        if hdr_n > total_n
-            || total_n > MAX_PAYLOAD_BYTES
-            || subject.len() > MAX_SUBJECT
-        {
+        if hdr_n > total_n || total_n > MAX_PAYLOAD_BYTES || subject.len() > MAX_SUBJECT {
             self.bypass = true;
             return NatsParserOutput::Skip(full.len());
         }
@@ -340,8 +346,7 @@ impl NatsParser {
         rec.subject = Some(subject);
         rec.reply_to = reply_to;
         rec.payload_bytes = Some(u32_saturating(payload_len as u64));
-        rec.payload_preview =
-            Some(payload[..payload.len().min(MAX_PAYLOAD_PREVIEW)].to_vec());
+        rec.payload_preview = Some(payload[..payload.len().min(MAX_PAYLOAD_PREVIEW)].to_vec());
         rec.headers = Some(stringify_headers(header_block));
         NatsParserOutput::Record {
             record: rec,
@@ -441,10 +446,7 @@ impl NatsParser {
             self.bypass = true;
             return NatsParserOutput::Skip(full.len());
         };
-        if hdr_n > total_n
-            || total_n > MAX_PAYLOAD_BYTES
-            || subject.len() > MAX_SUBJECT
-        {
+        if hdr_n > total_n || total_n > MAX_PAYLOAD_BYTES || subject.len() > MAX_SUBJECT {
             self.bypass = true;
             return NatsParserOutput::Skip(full.len());
         }
@@ -468,8 +470,7 @@ impl NatsParser {
         rec.sid = Some(sid);
         rec.reply_to = reply_to;
         rec.payload_bytes = Some(u32_saturating(payload_len as u64));
-        rec.payload_preview =
-            Some(payload[..payload.len().min(MAX_PAYLOAD_PREVIEW)].to_vec());
+        rec.payload_preview = Some(payload[..payload.len().min(MAX_PAYLOAD_PREVIEW)].to_vec());
         rec.headers = Some(stringify_headers(header_block));
         NatsParserOutput::Record {
             record: rec,
@@ -974,8 +975,7 @@ mod tests {
 
     #[test]
     fn connect_pass_and_jwt_redacted() {
-        let buf =
-            b"CONNECT {\"user\":\"bob\",\"pass\":\"hunter2\",\"jwt\":\"eyJ.aaa.bbb\"}\r\n";
+        let buf = b"CONNECT {\"user\":\"bob\",\"pass\":\"hunter2\",\"jwt\":\"eyJ.aaa.bbb\"}\r\n";
         match parse_one(buf, Direction::Tx) {
             NatsParserOutput::Record { record, .. } => {
                 let j = record.info_json.expect("json");
@@ -1045,8 +1045,8 @@ mod tests {
         let mut buf = Vec::new();
         buf.extend_from_slice(b"PUB foo 11\r\nHello WorldX"); // garbage instead of CRLF
         buf.extend_from_slice(b"Y"); // total 14 bytes of "payload+tail"
-        // Needs 11 payload + 2 CRLF = 13 bytes after header; buf has enough.
-        // Feed full length to force check.
+                                     // Needs 11 payload + 2 CRLF = 13 bytes after header; buf has enough.
+                                     // Feed full length to force check.
         let enough = b"PUB foo 11\r\nHello WorldXY";
         match parse_one(enough, Direction::Tx) {
             NatsParserOutput::Skip(n) => assert_eq!(n, enough.len()),

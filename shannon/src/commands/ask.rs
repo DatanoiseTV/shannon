@@ -26,7 +26,9 @@ const SYSTEM_PROMPT: &str = "You are shannon-ask, an observability assistant att
 pub fn run(_cli: &Cli, args: AskArgs) -> Result<()> {
     let (endpoint, model, kind) = match args.endpoint.as_deref() {
         Some("ollama") => (OLLAMA_DEFAULT.to_string(), args.model.clone(), "ollama"),
-        Some("lmstudio" | "lm-studio") => (LMSTUDIO_DEFAULT.to_string(), args.model.clone(), "lmstudio"),
+        Some("lmstudio" | "lm-studio") => {
+            (LMSTUDIO_DEFAULT.to_string(), args.model.clone(), "lmstudio")
+        }
         Some("auto") | None => {
             // Probe common local listeners and pick the first that answers.
             let found = autodiscover();
@@ -35,7 +37,10 @@ pub fn run(_cli: &Cli, args: AskArgs) -> Result<()> {
                     "shannon: autodiscovered {} at {}",
                     first.kind, first.base_url
                 );
-                let picked_model = first.first_model.clone().unwrap_or_else(|| args.model.clone());
+                let picked_model = first
+                    .first_model
+                    .clone()
+                    .unwrap_or_else(|| args.model.clone());
                 (first.base_url.clone(), picked_model, first.kind)
             } else {
                 anyhow::bail!(

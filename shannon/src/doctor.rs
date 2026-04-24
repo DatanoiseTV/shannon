@@ -8,8 +8,8 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use crate::AppError;
 use crate::cli::Cli;
+use crate::AppError;
 
 /// Runs all checks and prints the report. Exits non-zero if any required
 /// check failed.
@@ -59,7 +59,9 @@ impl Report {
     }
 
     fn any_required_failed(&self) -> bool {
-        self.rows.iter().any(|r| r.required && r.status == Status::Fail)
+        self.rows
+            .iter()
+            .any(|r| r.required && r.status == Status::Fail)
     }
 
     fn print(&self) {
@@ -104,7 +106,10 @@ fn check_kernel(r: &mut Report) {
 
 fn kernel_version() -> Option<(u32, u32)> {
     let release = fs::read_to_string("/proc/sys/kernel/osrelease").ok()?;
-    let mut parts = release.trim().split(|c: char| !c.is_ascii_digit()).filter(|s| !s.is_empty());
+    let mut parts = release
+        .trim()
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|s| !s.is_empty());
     let major = parts.next()?.parse().ok()?;
     let minor = parts.next()?.parse().ok()?;
     Some((major, minor))
@@ -121,7 +126,8 @@ fn check_btf(r: &mut Report) {
             "/sys/kernel/btf/vmlinux missing".into()
         },
         fix: (!present).then(|| {
-            "enable CONFIG_DEBUG_INFO_BTF in your kernel config; most distro kernels have this".into()
+            "enable CONFIG_DEBUG_INFO_BTF in your kernel config; most distro kernels have this"
+                .into()
         }),
         required: true,
     });
@@ -130,7 +136,10 @@ fn check_btf(r: &mut Report) {
 fn check_rlimit_memlock(r: &mut Report) {
     // Modern kernels (>= 5.11) don't need this, but older do.
     let fix = "ulimit -l unlimited  # or set LimitMEMLOCK=infinity in the systemd unit";
-    let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
     // SAFETY: getrlimit is always-safe; we pass a valid out-pointer.
     let rc = unsafe { libc::getrlimit(libc::RLIMIT_MEMLOCK, &mut limit) };
     if rc != 0 {
@@ -170,7 +179,11 @@ fn check_capabilities(r: &mut Report) {
         return;
     }
     // Probe for the capabilities we need.
-    let required = [caps::Capability::CAP_BPF, caps::Capability::CAP_PERFMON, caps::Capability::CAP_NET_ADMIN];
+    let required = [
+        caps::Capability::CAP_BPF,
+        caps::Capability::CAP_PERFMON,
+        caps::Capability::CAP_NET_ADMIN,
+    ];
     let effective = caps::read(None, caps::CapSet::Effective).unwrap_or_default();
     let missing: Vec<_> = required.iter().filter(|c| !effective.contains(c)).collect();
     if missing.is_empty() {
@@ -208,12 +221,18 @@ fn check_libssl(r: &mut Report) {
     let found = candidates.iter().find(|p| Path::new(p).exists());
     r.push(Row {
         name: "libssl (for TLS)",
-        status: if found.is_some() { Status::Ok } else { Status::Warn },
+        status: if found.is_some() {
+            Status::Ok
+        } else {
+            Status::Warn
+        },
         detail: found.map_or_else(
             || "not found — TLS via OpenSSL will be unavailable".into(),
             |p| (*p).to_string(),
         ),
-        fix: found.is_none().then(|| "apt install libssl3 # or equivalent".into()),
+        fix: found
+            .is_none()
+            .then(|| "apt install libssl3 # or equivalent".into()),
         required: false,
     });
 }
@@ -230,12 +249,18 @@ fn check_libsqlite3(r: &mut Report) {
     let found = candidates.iter().find(|p| Path::new(p).exists());
     r.push(Row {
         name: "libsqlite3 (for SQL)",
-        status: if found.is_some() { Status::Ok } else { Status::Warn },
+        status: if found.is_some() {
+            Status::Ok
+        } else {
+            Status::Warn
+        },
         detail: found.map_or_else(
             || "not found — sqlite3_prepare_v2 / exec uprobes will be unavailable".into(),
             |p| (*p).to_string(),
         ),
-        fix: found.is_none().then(|| "apt install libsqlite3-0 # or equivalent".into()),
+        fix: found
+            .is_none()
+            .then(|| "apt install libsqlite3-0 # or equivalent".into()),
         required: false,
     });
 }
@@ -268,10 +293,12 @@ fn check_kallsyms(r: &mut Report) {
     let missing: Vec<&str> = needed
         .iter()
         .copied()
-        .filter(|sym| !body.lines().any(|l| {
-            // /proc/kallsyms lines look like "ffffffff814a3e90 T tcp_sendmsg".
-            l.split_whitespace().nth(2) == Some(sym)
-        }))
+        .filter(|sym| {
+            !body.lines().any(|l| {
+                // /proc/kallsyms lines look like "ffffffff814a3e90 T tcp_sendmsg".
+                l.split_whitespace().nth(2) == Some(sym)
+            })
+        })
         .collect();
     if missing.is_empty() {
         r.push(Row {
@@ -287,7 +314,8 @@ fn check_kallsyms(r: &mut Report) {
             status: Status::Warn,
             detail: format!("missing: {}", missing.join(", ")),
             fix: Some(
-                "rebuild kernel with CONFIG_KPROBES + CONFIG_NET; or run with kptr_restrict=0".into(),
+                "rebuild kernel with CONFIG_KPROBES + CONFIG_NET; or run with kptr_restrict=0"
+                    .into(),
             ),
             required: false,
         });

@@ -20,12 +20,12 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
-    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction as LayoutDirection, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    Terminal,
 };
 
 use crate::cli::{Cli, WatchArgs};
@@ -37,7 +37,9 @@ const LOG_CAP: usize = 2048;
 const HEADER_TICK: Duration = Duration::from_millis(250);
 
 pub fn run(_cli: &Cli, args: WatchArgs) -> Result<()> {
-    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     rt.block_on(async move { run_async(args).await })
 }
 
@@ -116,7 +118,10 @@ fn handle_key(state: &mut AppState, k: KeyEvent) -> bool {
             state.list_state.select(None);
         }
         (KeyCode::Up, _) => {
-            let next = state.list_state.selected().map_or(0, |i| i.saturating_sub(1));
+            let next = state
+                .list_state
+                .selected()
+                .map_or(0, |i| i.saturating_sub(1));
             state.list_state.select(Some(next));
         }
         (KeyCode::Down, _) => {
@@ -182,7 +187,10 @@ impl AppState {
         // Feed data events into flow/parsers and append any records.
         match ev {
             DecodedEvent::TcpData(ctx, d) => {
-                let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
+                let key = FlowKey::Tcp {
+                    pid: ctx.tgid,
+                    sock_id: d.sock_id,
+                };
                 flows.hint_port(key.clone(), d.dst.1);
                 for r in flows.feed(key, d.direction, &d.data) {
                     if !self.paused {
@@ -192,7 +200,10 @@ impl AppState {
                 }
             }
             DecodedEvent::TlsData(ctx, d) => {
-                let key = FlowKey::Tls { pid: ctx.tgid, conn_id: d.conn_id };
+                let key = FlowKey::Tls {
+                    pid: ctx.tgid,
+                    conn_id: d.conn_id,
+                };
                 for r in flows.feed(key, d.direction, &d.data) {
                     if !self.paused {
                         self.push_log(from_any_record(&r, d.direction));
@@ -201,7 +212,10 @@ impl AppState {
                 }
             }
             DecodedEvent::ConnEnd(ctx, c) => {
-                flows.forget(&FlowKey::Tcp { pid: ctx.tgid, sock_id: c.sock_id });
+                flows.forget(&FlowKey::Tcp {
+                    pid: ctx.tgid,
+                    sock_id: c.sock_id,
+                });
             }
             _ => {}
         }
@@ -231,8 +245,12 @@ fn classify(ev: &DecodedEvent) -> (Option<LogLine>, Option<&'static str>) {
                 dir_arrow: "→",
                 text: format!(
                     "pid={} comm={}  {}:{} -> {}:{}",
-                    ctx.tgid, trunc(&ctx.comm, 15),
-                    c.src.0, c.src.1, c.dst.0, c.dst.1,
+                    ctx.tgid,
+                    trunc(&ctx.comm, 15),
+                    c.src.0,
+                    c.src.1,
+                    c.dst.0,
+                    c.dst.1,
                 ),
             }),
             Some("conn"),
@@ -243,7 +261,11 @@ fn classify(ev: &DecodedEvent) -> (Option<LogLine>, Option<&'static str>) {
                 dir_arrow: "×",
                 text: format!(
                     "pid={} comm={}  sent={} recv={} rtt={}us",
-                    ctx.tgid, trunc(&ctx.comm, 15), c.bytes_sent, c.bytes_recv, c.rtt_us
+                    ctx.tgid,
+                    trunc(&ctx.comm, 15),
+                    c.bytes_sent,
+                    c.bytes_recv,
+                    c.rtt_us
                 ),
             }),
             Some("end"),
@@ -254,9 +276,13 @@ fn classify(ev: &DecodedEvent) -> (Option<LogLine>, Option<&'static str>) {
                 dir_arrow: arrow(d.direction),
                 text: format!(
                     "pid={} comm={}  {}:{} {} {}:{}",
-                    ctx.tgid, trunc(&ctx.comm, 15),
-                    d.src.0, d.src.1, dir_arrow(d.direction),
-                    d.dst.0, d.dst.1,
+                    ctx.tgid,
+                    trunc(&ctx.comm, 15),
+                    d.src.0,
+                    d.src.1,
+                    dir_arrow(d.direction),
+                    d.dst.0,
+                    d.dst.1,
                 ),
             }),
             Some("dns"),
@@ -267,8 +293,11 @@ fn classify(ev: &DecodedEvent) -> (Option<LogLine>, Option<&'static str>) {
                 dir_arrow: "→",
                 text: format!(
                     "pid={} comm={}  db=0x{:x}  {}: {}",
-                    ctx.tgid, trunc(&ctx.comm, 15),
-                    s.db_handle, s.api.label(), trunc(&s.sql, 80),
+                    ctx.tgid,
+                    trunc(&ctx.comm, 15),
+                    s.db_handle,
+                    s.api.label(),
+                    trunc(&s.sql, 80),
                 ),
             }),
             Some("sql"),
@@ -278,7 +307,11 @@ fn classify(ev: &DecodedEvent) -> (Option<LogLine>, Option<&'static str>) {
 }
 
 fn from_any_record(r: &AnyRecord, dir: Direction) -> LogLine {
-    LogLine { proto: r.protocol(), dir_arrow: arrow(dir), text: r.display_line() }
+    LogLine {
+        proto: r.protocol(),
+        dir_arrow: arrow(dir),
+        text: r.display_line(),
+    }
 }
 
 fn draw(f: &mut ratatui::Frame<'_>, state: &AppState) {
@@ -295,7 +328,12 @@ fn draw(f: &mut ratatui::Frame<'_>, state: &AppState) {
     // Header.
     let uptime = state.started.elapsed();
     let mut header_spans = vec![
-        Span::styled("shannon", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "shannon",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("   "),
         Span::raw(format!("up {}s   ", uptime.as_secs())),
         Span::raw(format!("events {}   ", state.total_events)),
@@ -317,7 +355,9 @@ fn draw(f: &mut ratatui::Frame<'_>, state: &AppState) {
         header_spans.push(Span::raw("   "));
         header_spans.push(Span::styled(
             "PAUSED",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ));
     }
     let header = Paragraph::new(Line::from(header_spans)).block(
@@ -348,10 +388,9 @@ fn draw(f: &mut ratatui::Frame<'_>, state: &AppState) {
         })
         .collect();
     let list = List::new(items).block(
-        Block::default().borders(Borders::ALL).title(Span::styled(
-            " live ",
-            Style::default().fg(Color::Cyan),
-        )),
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(" live ", Style::default().fg(Color::Cyan))),
     );
     // We don't use ListState selection for rendering in v0.1, but keep
     // the hook live so ↑/↓ can attach to highlight selection later.
@@ -409,7 +448,11 @@ fn dir_arrow(d: Direction) -> &'static str {
 }
 
 fn trunc(s: &str, n: usize) -> &str {
-    if s.len() <= n { s } else { &s[..n] }
+    if s.len() <= n {
+        s
+    } else {
+        &s[..n]
+    }
 }
 
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {

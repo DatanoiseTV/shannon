@@ -73,14 +73,22 @@ impl SipRecord {
             .as_deref()
             .map(|s| format!(" from={s}"))
             .unwrap_or_default();
-        let to = self.to.as_deref().map(|s| format!(" to={s}")).unwrap_or_default();
+        let to = self
+            .to
+            .as_deref()
+            .map(|s| format!(" to={s}"))
+            .unwrap_or_default();
         let ua = self
             .user_agent
             .as_deref()
             .map(|s| format!(" ua=\"{s}\""))
             .unwrap_or_default();
         let auth = if self.has_auth { " auth=present" } else { "" };
-        let body = if self.body_len > 0 { format!(" body={}B", self.body_len) } else { String::new() };
+        let body = if self.body_len > 0 {
+            format!(" body={}B", self.body_len)
+        } else {
+            String::new()
+        };
         format!("sip {head}{cid}{from}{to}{ua}{auth}{body}")
     }
 }
@@ -110,7 +118,9 @@ impl SipParser {
                 return SipParserOutput::Skip(buf.len());
             }
         };
-        let mut lines = header_str.split(|c| c == '\r' || c == '\n').filter(|l| !l.is_empty());
+        let mut lines = header_str
+            .split(|c| c == '\r' || c == '\n')
+            .filter(|l| !l.is_empty());
         let start_line = match lines.next() {
             Some(l) => l,
             None => {
@@ -174,7 +184,10 @@ impl SipParser {
             has_auth,
             body_len: body_len_declared,
         };
-        SipParserOutput::Record { record: rec, consumed: total }
+        SipParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
@@ -212,7 +225,10 @@ fn parse_start_line(line: &str) -> Option<SipKind> {
     if !is_known_method(method) {
         return None;
     }
-    Some(SipKind::Request { method: method.to_string(), uri: uri.to_string() })
+    Some(SipKind::Request {
+        method: method.to_string(),
+        uri: uri.to_string(),
+    })
 }
 
 fn is_known_method(m: &str) -> bool {
@@ -321,6 +337,9 @@ mod tests {
     #[test]
     fn partial_returns_need() {
         let mut p = SipParser::default();
-        assert!(matches!(p.parse(b"INVITE sip:b", Direction::Tx), SipParserOutput::Need));
+        assert!(matches!(
+            p.parse(b"INVITE sip:b", Direction::Tx),
+            SipParserOutput::Need
+        ));
     }
 }

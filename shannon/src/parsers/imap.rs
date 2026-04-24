@@ -37,10 +37,10 @@ pub enum ImapParserOutput {
 #[derive(Debug, Clone)]
 pub struct ImapRecord {
     pub direction: Direction,
-    pub tag: String,         // empty for server untagged responses
+    pub tag: String, // empty for server untagged responses
     pub kind: ImapKind,
-    pub args: String,        // verbatim trailing args (post-redaction)
-    pub text: String,        // free-form response text
+    pub args: String, // verbatim trailing args (post-redaction)
+    pub text: String, // free-form response text
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,9 +49,9 @@ pub enum ImapKind {
     Capability,
     Noop,
     Logout,
-    Login,                    // args redacted (password)
-    Authenticate,             // args redacted
-    AuthContinuation,         // base64 line after AUTHENTICATE
+    Login,            // args redacted (password)
+    Authenticate,     // args redacted
+    AuthContinuation, // base64 line after AUTHENTICATE
     Select,
     Examine,
     Create,
@@ -357,10 +357,7 @@ impl ImapParser {
                                 tag: String::new(),
                                 kind: kind2,
                                 args: String::new(),
-                                text: truncate_to(
-                                    format!("{} {}", v, after.trim_end()),
-                                    MAX_ARG,
-                                ),
+                                text: truncate_to(format!("{} {}", v, after.trim_end()), MAX_ARG),
                             },
                             consumed,
                         };
@@ -500,10 +497,7 @@ mod tests {
     fn literal_skips_exact_bytes() {
         let mut p = ImapParser::default();
         // APPEND command with a literal — 10 bytes to follow.
-        let out = p.parse(
-            b"A003 APPEND INBOX {10}\r\n",
-            Direction::Tx,
-        );
+        let out = p.parse(b"A003 APPEND INBOX {10}\r\n", Direction::Tx);
         match out {
             ImapParserOutput::Record { record, .. } => {
                 assert_eq!(record.kind, ImapKind::Append);
@@ -516,13 +510,19 @@ mod tests {
             ImapParserOutput::Skip(10)
         ));
         // Then the trailing CRLF becomes a normal line.
-        assert!(matches!(p.parse(b"\r\n", Direction::Tx), ImapParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(b"\r\n", Direction::Tx),
+            ImapParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn list_response() {
         let mut p = ImapParser::default();
-        match p.parse(b"* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n", Direction::Rx) {
+        match p.parse(
+            b"* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n",
+            Direction::Rx,
+        ) {
             ImapParserOutput::Record { record, .. } => {
                 assert_eq!(record.kind, ImapKind::UntaggedList);
                 assert!(record.text.contains("INBOX"));

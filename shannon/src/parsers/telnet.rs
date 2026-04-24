@@ -30,13 +30,19 @@ pub struct TelnetParser {
 
 impl Default for TelnetParser {
     fn default() -> Self {
-        Self { bypass: false, line: Vec::new() }
+        Self {
+            bypass: false,
+            line: Vec::new(),
+        }
     }
 }
 
 pub enum TelnetParserOutput {
     Need,
-    Record { record: TelnetRecord, consumed: usize },
+    Record {
+        record: TelnetRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -154,7 +160,10 @@ impl TelnetParser {
                         return TelnetParserOutput::Record {
                             record: TelnetRecord {
                                 direction: dir,
-                                kind: TelnetKind::Negotiation { cmd: c, option: opt },
+                                kind: TelnetKind::Negotiation {
+                                    cmd: c,
+                                    option: opt,
+                                },
                             },
                             consumed: i + 3,
                         };

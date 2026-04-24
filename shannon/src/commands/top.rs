@@ -23,7 +23,9 @@ use crate::parsers::http1::RecordKind as Http1Kind;
 use crate::runtime::{FilterSetup, Runtime};
 
 pub fn run(_cli: &Cli, args: TopArgs) -> Result<()> {
-    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     rt.block_on(async move { run_async(args).await })
 }
 
@@ -65,7 +67,10 @@ async fn run_async(args: TopArgs) -> Result<()> {
 fn absorb(flows: &mut FlowTable, catalog: &ApiCatalog, ev: &DecodedEvent) {
     match ev {
         DecodedEvent::TcpData(ctx, d) => {
-            let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
+            let key = FlowKey::Tcp {
+                pid: ctx.tgid,
+                sock_id: d.sock_id,
+            };
             flows.hint_port(key.clone(), d.dst.1);
             let peer = format!("{}:{}", d.dst.0, d.dst.1);
             for r in flows.feed(key, d.direction, &d.data) {
@@ -73,14 +78,20 @@ fn absorb(flows: &mut FlowTable, catalog: &ApiCatalog, ev: &DecodedEvent) {
             }
         }
         DecodedEvent::TlsData(ctx, d) => {
-            let key = FlowKey::Tls { pid: ctx.tgid, conn_id: d.conn_id };
+            let key = FlowKey::Tls {
+                pid: ctx.tgid,
+                conn_id: d.conn_id,
+            };
             let peer = format!("tls:{:x}", d.conn_id);
             for r in flows.feed(key, d.direction, &d.data) {
                 feed_record(catalog, &r, &peer);
             }
         }
         DecodedEvent::ConnEnd(ctx, c) => {
-            flows.forget(&FlowKey::Tcp { pid: ctx.tgid, sock_id: c.sock_id });
+            flows.forget(&FlowKey::Tcp {
+                pid: ctx.tgid,
+                sock_id: c.sock_id,
+            });
         }
         _ => {}
     }
@@ -194,9 +205,10 @@ fn regroup(snap: &[EndpointSummary], group_by: TopGroupBy) -> Vec<Row> {
     let mut acc: BTreeMap<String, Row> = BTreeMap::new();
     for e in snap {
         let key = match group_by {
-            TopGroupBy::Service => {
-                e.host.clone().unwrap_or_else(|| e.template.split('/').next().unwrap_or("").to_string())
-            }
+            TopGroupBy::Service => e
+                .host
+                .clone()
+                .unwrap_or_else(|| e.template.split('/').next().unwrap_or("").to_string()),
             TopGroupBy::Endpoint => e.key.clone(),
             TopGroupBy::Pid => "-".to_string(),
             TopGroupBy::Pod => "-".to_string(),
@@ -236,14 +248,16 @@ fn sort_snapshot(snap: &mut [EndpointSummary], by: TopSort) {
         }
         TopSort::P50 => {
             snap.sort_by(|a, b| {
-                b.latency_ms_p50.unwrap_or(0.0)
+                b.latency_ms_p50
+                    .unwrap_or(0.0)
                     .partial_cmp(&a.latency_ms_p50.unwrap_or(0.0))
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
         }
         TopSort::P99 => {
             snap.sort_by(|a, b| {
-                b.latency_ms_p99.unwrap_or(0.0)
+                b.latency_ms_p99
+                    .unwrap_or(0.0)
                     .partial_cmp(&a.latency_ms_p99.unwrap_or(0.0))
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
@@ -267,7 +281,11 @@ fn err_count(e: &EndpointSummary) -> u64 {
 }
 
 fn truncate(s: &str, n: usize) -> &str {
-    if s.len() <= n { s } else { &s[..n] }
+    if s.len() <= n {
+        s
+    } else {
+        &s[..n]
+    }
 }
 
 fn humanise(n: u64) -> String {

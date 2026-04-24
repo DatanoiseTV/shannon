@@ -38,7 +38,10 @@ impl Default for TacacsParser {
 
 pub enum TacacsParserOutput {
     Need,
-    Record { record: TacacsRecord, consumed: usize },
+    Record {
+        record: TacacsRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -60,7 +63,11 @@ pub struct TacacsRecord {
 impl TacacsRecord {
     pub fn display_line(&self) -> String {
         let enc = if self.unencrypted { " UNENCRYPTED" } else { "" };
-        let sc = if self.single_connect { " single-conn" } else { "" };
+        let sc = if self.single_connect {
+            " single-conn"
+        } else {
+            ""
+        };
         format!(
             "tacacs+ v{}.{} {} seq={} sess=0x{:08x} len={}{enc}{sc}",
             self.major, self.minor, self.type_name, self.seq, self.session_id, self.length,
@@ -157,7 +164,10 @@ mod tests {
     #[test]
     fn short_needs_more() {
         let mut p = TacacsParser::default();
-        assert!(matches!(p.parse(&[0u8; 5], Direction::Tx), TacacsParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 5], Direction::Tx),
+            TacacsParserOutput::Need
+        ));
     }
 
     #[test]

@@ -102,7 +102,10 @@ pub enum RecordKind {
 /// Result of one parse step.
 pub enum ParserOutput {
     Need,
-    Record { record: ParsedRecord, consumed: usize },
+    Record {
+        record: ParsedRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -224,7 +227,10 @@ impl Http1Parser {
         } else {
             // No body — emit immediately.
             let rec = self.emit(true);
-            return ParserOutput::Record { record: rec, consumed: header_len };
+            return ParserOutput::Record {
+                record: rec,
+                consumed: header_len,
+            };
         }
         // We return Skip with the header length so the flow reconstructor
         // drops exactly the header bytes before we start the body phase.
@@ -234,7 +240,10 @@ impl Http1Parser {
     fn parse_body(&mut self, buf: &[u8]) -> ParserOutput {
         if self.remaining_body == 0 {
             let rec = self.emit(true);
-            return ParserOutput::Record { record: rec, consumed: 0 };
+            return ParserOutput::Record {
+                record: rec,
+                consumed: 0,
+            };
         }
         let take = buf.len().min(self.remaining_body);
         if take == 0 {
@@ -248,7 +257,10 @@ impl Http1Parser {
         self.remaining_body -= take;
         if self.remaining_body == 0 {
             let rec = self.emit(true);
-            ParserOutput::Record { record: rec, consumed: take }
+            ParserOutput::Record {
+                record: rec,
+                consumed: take,
+            }
         } else {
             ParserOutput::Skip(take)
         }
@@ -260,11 +272,15 @@ impl Http1Parser {
         };
         match cs {
             ChunkState::Size => {
-                let Some(line_end) = find_crlf(buf) else { return ParserOutput::Need };
+                let Some(line_end) = find_crlf(buf) else {
+                    return ParserOutput::Need;
+                };
                 let line = &buf[..line_end];
                 // Strip any chunk extensions after ';'.
-                let size_part =
-                    line.iter().position(|&b| b == b';').map_or(line, |i| &line[..i]);
+                let size_part = line
+                    .iter()
+                    .position(|&b| b == b';')
+                    .map_or(line, |i| &line[..i]);
                 let Ok(size_str) = std::str::from_utf8(size_part) else {
                     self.state = State::Bypass;
                     return ParserOutput::Skip(buf.len());
@@ -314,14 +330,20 @@ impl Http1Parser {
                 if buf.starts_with(b"\r\n") {
                     self.state = State::Headers;
                     let rec = self.emit(true);
-                    return ParserOutput::Record { record: rec, consumed: 2 };
+                    return ParserOutput::Record {
+                        record: rec,
+                        consumed: 2,
+                    };
                 }
                 let Some(end) = find_double_crlf(buf) else {
                     return ParserOutput::Need;
                 };
                 self.state = State::Headers;
                 let rec = self.emit(true);
-                ParserOutput::Record { record: rec, consumed: end + 4 }
+                ParserOutput::Record {
+                    record: rec,
+                    consumed: end + 4,
+                }
             }
         }
     }
@@ -330,8 +352,10 @@ impl Http1Parser {
         self.state = State::Headers;
         self.remaining_body = 0;
         self.chunked = false;
-        let info =
-            self.current.take().expect("emit called without current record");
+        let info = self
+            .current
+            .take()
+            .expect("emit called without current record");
         let total_body_bytes = info.body.len() as u64;
         ParsedRecord {
             kind: info.kind,
@@ -369,10 +393,12 @@ fn collect_headers(headers: &[httparse::Header<'_>]) -> Vec<(String, String)> {
 }
 
 fn starts_with_method_letter(buf: &[u8]) -> bool {
-    buf.first().is_some_and(|b| b.is_ascii_uppercase() && buf[0] != b'H' || {
-        // Allow HTTP/0.9-style 'H' only when followed by method letters, not 'T' (would be response).
-        // Practically: accept any uppercase letter; response check (starts "HTTP/") has priority at caller.
-        b.is_ascii_uppercase()
+    buf.first().is_some_and(|b| {
+        b.is_ascii_uppercase() && buf[0] != b'H' || {
+            // Allow HTTP/0.9-style 'H' only when followed by method letters, not 'T' (would be response).
+            // Practically: accept any uppercase letter; response check (starts "HTTP/") has priority at caller.
+            b.is_ascii_uppercase()
+        }
     })
 }
 
@@ -428,13 +454,15 @@ mod tests {
     #[test]
     fn chunked_response() {
         let mut p = Http1Parser::default();
-        let resp =
-            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n";
+        let resp = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n";
         let mut offset = 0;
         let mut got = None;
         for _ in 0..20 {
             match p.parse(&resp[offset..], Direction::Rx) {
-                ParserOutput::Record { record, consumed: _ } => {
+                ParserOutput::Record {
+                    record,
+                    consumed: _,
+                } => {
                     got = Some(record);
                     break;
                 }

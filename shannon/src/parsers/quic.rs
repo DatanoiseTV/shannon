@@ -21,8 +21,8 @@
 //! packets (Handshake, 1-RTT) need keys derived from the TLS
 //! master secret, which shannon doesn't have; those stay opaque.
 
+use aes::cipher::{generic_array::GenericArray, BlockEncrypt, KeyInit};
 use aes::Aes128;
-use aes::cipher::{BlockEncrypt, KeyInit, generic_array::GenericArray};
 use aes_gcm::{AeadInPlace, Aes128Gcm, Key, Nonce};
 use hkdf::Hkdf;
 use sha2::Sha256;
@@ -43,7 +43,10 @@ pub struct QuicParser {
 
 impl Default for QuicParser {
     fn default() -> Self {
-        Self { bypass: false, done: false }
+        Self {
+            bypass: false,
+            done: false,
+        }
     }
 }
 
@@ -245,9 +248,7 @@ impl QuicParser {
         envelope.extend_from_slice(&crypto_bytes);
         let mut tls_parser = TlsParser::default();
         let tls = match tls_parser.parse(&envelope, dir) {
-            TlsParserOutput::Record { record, .. }
-                if matches!(record.kind, HelloKind::Client) =>
-            {
+            TlsParserOutput::Record { record, .. } if matches!(record.kind, HelloKind::Client) => {
                 Some(record)
             }
             _ => None,
@@ -255,7 +256,13 @@ impl QuicParser {
 
         self.done = true;
         QuicParserOutput::Record {
-            record: QuicRecord { direction: dir, version, dcid, scid, tls },
+            record: QuicRecord {
+                direction: dir,
+                version,
+                dcid,
+                scid,
+                tls,
+            },
             consumed: total,
         }
     }
@@ -391,7 +398,11 @@ fn reassemble(chunks: &std::collections::BTreeMap<u64, Vec<u8>>) -> Option<Vec<u
         out.extend_from_slice(bytes);
         expected += bytes.len() as u64;
     }
-    if out.is_empty() { None } else { Some(out) }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 #[cfg(test)]
@@ -410,7 +421,10 @@ mod tests {
     #[test]
     fn short_needs_more() {
         let mut p = QuicParser::default();
-        assert!(matches!(p.parse(&[0xc0, 0, 0], Direction::Tx), QuicParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0xc0, 0, 0], Direction::Tx),
+            QuicParserOutput::Need
+        ));
     }
 
     /// Sample from RFC 9001 Appendix A.1 — decrypt the client Initial
@@ -472,11 +486,14 @@ mod tests {
                 let tls = record.tls.expect("TLS extracted");
                 assert_eq!(tls.sni.as_deref(), Some("example.com"));
             }
-            other => panic!("unexpected output: {}", match other {
-                QuicParserOutput::Need => "Need",
-                QuicParserOutput::Skip(_) => "Skip",
-                _ => "?",
-            }),
+            other => panic!(
+                "unexpected output: {}",
+                match other {
+                    QuicParserOutput::Need => "Need",
+                    QuicParserOutput::Skip(_) => "Skip",
+                    _ => "?",
+                }
+            ),
         }
     }
 }

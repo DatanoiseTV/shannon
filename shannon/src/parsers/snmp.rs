@@ -52,7 +52,7 @@ pub enum SnmpParserOutput {
 #[derive(Debug, Clone)]
 pub struct SnmpRecord {
     pub direction: Direction,
-    pub version: u8,          // wire: 0 = v1, 1 = v2c, 3 = v3
+    pub version: u8, // wire: 0 = v1, 1 = v2c, 3 = v3
     pub version_name: &'static str,
     pub community: Option<String>,
     pub pdu_type: Option<u8>,
@@ -140,7 +140,10 @@ impl SnmpParser {
                 error_status: None,
                 first_oid: None,
             };
-            return SnmpParserOutput::Record { record: rec, consumed: total };
+            return SnmpParserOutput::Record {
+                record: rec,
+                consumed: total,
+            };
         }
 
         // community OCTET STRING
@@ -151,7 +154,9 @@ impl SnmpParser {
                 return SnmpParserOutput::Skip(total);
             }
         };
-        let community = std::str::from_utf8(community_bytes).ok().map(|s| s.to_string());
+        let community = std::str::from_utf8(community_bytes)
+            .ok()
+            .map(|s| s.to_string());
 
         // PDU: context-specific IMPLICIT tag 0xAn
         let (pdu_type, pdu_content) = match read_pdu(rest) {
@@ -168,7 +173,10 @@ impl SnmpParser {
                     error_status: None,
                     first_oid: None,
                 };
-                return SnmpParserOutput::Record { record: rec, consumed: total };
+                return SnmpParserOutput::Record {
+                    record: rec,
+                    consumed: total,
+                };
             }
         };
         let (request_id, rest) = read_integer(pdu_content).unzip();
@@ -200,7 +208,10 @@ impl SnmpParser {
             error_status,
             first_oid,
         };
-        SnmpParserOutput::Record { record: rec, consumed: total }
+        SnmpParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
@@ -391,6 +402,9 @@ mod tests {
     #[test]
     fn short_needs_more() {
         let mut p = SnmpParser::default();
-        assert!(matches!(p.parse(&[0x30], Direction::Tx), SnmpParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0x30], Direction::Tx),
+            SnmpParserOutput::Need
+        ));
     }
 }

@@ -37,7 +37,10 @@ impl Default for Iec104Parser {
 
 pub enum Iec104ParserOutput {
     Need,
-    Record { record: Iec104Record, consumed: usize },
+    Record {
+        record: Iec104Record,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -51,7 +54,11 @@ pub struct Iec104Record {
 #[derive(Debug, Clone)]
 pub enum Frame {
     /// Information transfer frame.
-    I { send_seq: u16, recv_seq: u16, asdu: Option<Asdu> },
+    I {
+        send_seq: u16,
+        recv_seq: u16,
+        asdu: Option<Asdu>,
+    },
     /// Supervisory frame (ack).
     S { recv_seq: u16 },
     /// Unnumbered control frame.
@@ -73,9 +80,9 @@ pub enum UFunction {
 pub struct Asdu {
     pub type_id: u8,
     pub type_name: &'static str,
-    pub sq: bool,    // sequence flag
+    pub sq: bool, // sequence flag
     pub num_objects: u8,
-    pub cot: u8,     // cause of transmission
+    pub cot: u8, // cause of transmission
     pub cot_name: &'static str,
     pub negative_confirm: bool,
     pub test: bool,
@@ -86,7 +93,11 @@ pub struct Asdu {
 impl Iec104Record {
     pub fn display_line(&self) -> String {
         match &self.frame {
-            Frame::I { send_seq, recv_seq, asdu } => {
+            Frame::I {
+                send_seq,
+                recv_seq,
+                asdu,
+            } => {
                 let asdu_s = if let Some(a) = asdu {
                     format!(
                         " asdu={} ({})  cot={} ({})  oa={}  ca={}  objs={}",
@@ -138,7 +149,10 @@ impl Iec104Parser {
             apdu_len: len as u8,
             frame,
         };
-        Iec104ParserOutput::Record { record: rec, consumed: total }
+        Iec104ParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
@@ -152,8 +166,16 @@ fn decode_frame(ctrl: &[u8], asdu_bytes: &[u8]) -> Frame {
         // I-format: send seq in CF1/CF2 (15-bit with shift), recv seq in CF3/CF4.
         let send_seq = u16::from_le_bytes([cf1, ctrl[1]]) >> 1;
         let recv_seq = u16::from_le_bytes([ctrl[2], ctrl[3]]) >> 1;
-        let asdu = if asdu_bytes.is_empty() { None } else { decode_asdu(asdu_bytes) };
-        Frame::I { send_seq, recv_seq, asdu }
+        let asdu = if asdu_bytes.is_empty() {
+            None
+        } else {
+            decode_asdu(asdu_bytes)
+        };
+        Frame::I {
+            send_seq,
+            recv_seq,
+            asdu,
+        }
     } else if cf1 & 0x03 == 0x01 {
         // S-format: only recv seq.
         let recv_seq = u16::from_le_bytes([ctrl[2], ctrl[3]]) >> 1;

@@ -52,7 +52,13 @@ impl FileDumper {
 
     /// Write an HTTP/1 response body to disk. Returns `None` if the record
     /// isn't a response or has an empty body.
-    pub fn write_http1(&mut self, r: &ParsedRecord, request_method: Option<&str>, request_path: Option<&str>, host: Option<&str>) -> Option<PathBuf> {
+    pub fn write_http1(
+        &mut self,
+        r: &ParsedRecord,
+        request_method: Option<&str>,
+        request_path: Option<&str>,
+        host: Option<&str>,
+    ) -> Option<PathBuf> {
         if !matches!(r.kind, RecordKind::Response) {
             return None;
         }
@@ -85,7 +91,8 @@ impl FileDumper {
     pub fn write_named(&mut self, name: &str, bytes: &[u8]) -> Result<PathBuf> {
         let path = self.dir.join(name);
         let mut f = File::create(&path).with_context(|| format!("creating {}", path.display()))?;
-        f.write_all(bytes).with_context(|| format!("writing {}", path.display()))?;
+        f.write_all(bytes)
+            .with_context(|| format!("writing {}", path.display()))?;
         self.written += 1;
         Ok(path)
     }
@@ -119,8 +126,7 @@ fn decompress(body: &[u8], encoding: &str) -> Result<Vec<u8>> {
             Ok(out)
         }
         "zstd" => {
-            let decoded =
-                zstd::stream::decode_all(body).context("zstd decode")?;
+            let decoded = zstd::stream::decode_all(body).context("zstd decode")?;
             Ok(decoded)
         }
         "br" => {
@@ -138,7 +144,12 @@ fn decompress(body: &[u8], encoding: &str) -> Result<Vec<u8>> {
 }
 
 fn guess_extension(content_type: &str) -> &'static str {
-    let ct = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    let ct = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
     match ct.as_str() {
         "text/html" | "application/xhtml+xml" => "html",
         "text/plain" => "txt",
@@ -172,7 +183,10 @@ fn guess_extension(content_type: &str) -> &'static str {
 }
 
 fn make_filename(method: &str, host: &str, path: &str, ext: &str) -> String {
-    let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
     let path_slug = path_slug(path, 64);
     let fp = fnv1a8hex(path.as_bytes());
     let safe_host = host.chars().map(sanitise).collect::<String>();

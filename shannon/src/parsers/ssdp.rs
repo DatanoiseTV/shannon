@@ -116,7 +116,11 @@ impl SsdpParser {
             }
         }
         SsdpParserOutput::Record {
-            record: SsdpRecord { direction: dir, kind, headers },
+            record: SsdpRecord {
+                direction: dir,
+                kind,
+                headers,
+            },
             consumed: buf.len(),
         }
     }
@@ -152,7 +156,10 @@ mod tests {
             SsdpParserOutput::Record { record, .. } => {
                 assert_eq!(record.kind, SsdpKind::Notify);
                 assert_eq!(record.header("NT"), Some("upnp:rootdevice"));
-                assert_eq!(record.header("SERVER"), Some("Linux/5.10 UPnP/1.0 MiniDLNA/1.3.3"));
+                assert_eq!(
+                    record.header("SERVER"),
+                    Some("Linux/5.10 UPnP/1.0 MiniDLNA/1.3.3")
+                );
             }
             _ => panic!(),
         }
@@ -161,6 +168,9 @@ mod tests {
     #[test]
     fn non_ssdp_bypasses() {
         let mut p = SsdpParser::default();
-        assert!(matches!(p.parse(b"junk\r\n\r\n", Direction::Rx), SsdpParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(b"junk\r\n\r\n", Direction::Rx),
+            SsdpParserOutput::Skip(_)
+        ));
     }
 }

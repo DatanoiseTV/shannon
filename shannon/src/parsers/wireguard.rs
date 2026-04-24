@@ -44,7 +44,10 @@ impl Default for WireguardParser {
 
 pub enum WireguardParserOutput {
     Need,
-    Record { record: WireguardRecord, consumed: usize },
+    Record {
+        record: WireguardRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -110,13 +113,16 @@ impl WireguardParser {
         if msg_type != 4 && buf.len() < expected_len {
             return WireguardParserOutput::Need;
         }
-        let total = if msg_type == 4 { buf.len() } else { expected_len };
+        let total = if msg_type == 4 {
+            buf.len()
+        } else {
+            expected_len
+        };
         let (sender_index, receiver_index, ephemeral_prefix) = match msg_type {
             1 => {
                 let si = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
                 let eph = &buf[8..40];
-                let prefix: String =
-                    eph[..8].iter().map(|b| format!("{b:02x}")).collect();
+                let prefix: String = eph[..8].iter().map(|b| format!("{b:02x}")).collect();
                 (Some(si), None, Some(prefix))
             }
             2 => {
@@ -165,7 +171,10 @@ mod tests {
         buf[4..8].copy_from_slice(&0xdead_beefu32.to_le_bytes());
         // ephemeral = aa bb cc dd ee ff 00 11 ...
         let eph_start = 8usize;
-        for (i, b) in [0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11].iter().enumerate() {
+        for (i, b) in [0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11]
+            .iter()
+            .enumerate()
+        {
             buf[eph_start + i] = *b;
         }
         let mut p = WireguardParser::default();
@@ -184,12 +193,18 @@ mod tests {
     fn reserved_nonzero_bypasses() {
         let mut p = WireguardParser::default();
         let buf = [1u8, 0xff, 0, 0];
-        assert!(matches!(p.parse(&buf, Direction::Tx), WireguardParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&buf, Direction::Tx),
+            WireguardParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn short_needs_more() {
         let mut p = WireguardParser::default();
-        assert!(matches!(p.parse(&[1u8, 0, 0], Direction::Tx), WireguardParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[1u8, 0, 0], Direction::Tx),
+            WireguardParserOutput::Need
+        ));
     }
 }

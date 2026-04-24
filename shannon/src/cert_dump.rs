@@ -95,7 +95,12 @@ impl CertDumper {
     pub fn open(dir: impl AsRef<Path>) -> Result<Self> {
         let dir = dir.as_ref().to_path_buf();
         create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        Ok(Self { dir, seen: HashSet::new(), count: 0, pinned: HashSet::new() })
+        Ok(Self {
+            dir,
+            seen: HashSet::new(),
+            count: 0,
+            pinned: HashSet::new(),
+        })
     }
 
     pub fn count(&self) -> u64 {
@@ -114,8 +119,9 @@ impl CertDumper {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 anyhow::bail!("pin directory {} does not exist", dir.display());
             }
-            Err(e) => return Err(anyhow::Error::new(e)
-                .context(format!("reading {}", dir.display()))),
+            Err(e) => {
+                return Err(anyhow::Error::new(e).context(format!("reading {}", dir.display())))
+            }
         };
         for entry in entries {
             let entry = entry.context("dirent")?;
@@ -161,9 +167,8 @@ impl CertDumper {
             }
             let body = &p[4..4 + len];
             if ht == HT_CERTIFICATE && body.len() >= 3 {
-                let list_len = (u32::from(body[0]) << 16)
-                    | (u32::from(body[1]) << 8)
-                    | u32::from(body[2]);
+                let list_len =
+                    (u32::from(body[0]) << 16) | (u32::from(body[1]) << 8) | u32::from(body[2]);
                 let list_len = list_len as usize;
                 let mut cursor = &body[3..];
                 if list_len > cursor.len() {
@@ -314,7 +319,9 @@ fn weak_sig_label(oid: &str) -> Option<&'static str> {
 }
 
 fn common_name(name: &X509Name<'_>) -> Option<String> {
-    name.iter_common_name().next().and_then(|cn| cn.as_str().ok().map(str::to_string))
+    name.iter_common_name()
+        .next()
+        .and_then(|cn| cn.as_str().ok().map(str::to_string))
 }
 
 #[cfg(test)]
@@ -323,14 +330,24 @@ mod tests {
 
     #[test]
     fn rejects_non_tls() {
-        let mut d = CertDumper { dir: PathBuf::from("/dev/null"), seen: HashSet::new(), count: 0, pinned: HashSet::new() };
+        let mut d = CertDumper {
+            dir: PathBuf::from("/dev/null"),
+            seen: HashSet::new(),
+            count: 0,
+            pinned: HashSet::new(),
+        };
         assert!(d.observe(b"GET / HTTP/1.1\r\n").is_empty());
         assert!(d.observe(&[22, 3, 3]).is_empty()); // truncated header
     }
 
     #[test]
     fn ignores_handshake_without_certificate() {
-        let mut d = CertDumper { dir: PathBuf::from("/dev/null"), seen: HashSet::new(), count: 0, pinned: HashSet::new() };
+        let mut d = CertDumper {
+            dir: PathBuf::from("/dev/null"),
+            seen: HashSet::new(),
+            count: 0,
+            pinned: HashSet::new(),
+        };
         let payload = [22u8, 3, 3, 0, 4, 1, 0, 0, 0];
         assert!(d.observe(&payload).is_empty());
     }

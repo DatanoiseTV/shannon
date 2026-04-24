@@ -45,7 +45,10 @@ impl Default for BacnetParser {
 
 pub enum BacnetParserOutput {
     Need,
-    Record { record: BacnetRecord, consumed: usize },
+    Record {
+        record: BacnetRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -90,12 +93,27 @@ impl BacnetRecord {
     pub fn display_line(&self) -> String {
         let addr = match &self.npdu {
             Some(n) => {
-                let s = n.src.as_ref().map(|a| format_addr("src", a)).unwrap_or_default();
-                let d = n.dst.as_ref().map(|a| format_addr("dst", a)).unwrap_or_default();
+                let s = n
+                    .src
+                    .as_ref()
+                    .map(|a| format_addr("src", a))
+                    .unwrap_or_default();
+                let d = n
+                    .dst
+                    .as_ref()
+                    .map(|a| format_addr("dst", a))
+                    .unwrap_or_default();
                 if s.is_empty() && d.is_empty() {
                     String::new()
                 } else {
-                    format!(" {s}{}{d}", if !s.is_empty() && !d.is_empty() { " " } else { "" })
+                    format!(
+                        " {s}{}{d}",
+                        if !s.is_empty() && !d.is_empty() {
+                            " "
+                        } else {
+                            ""
+                        }
+                    )
                 }
             }
             None => String::new(),
@@ -163,7 +181,10 @@ impl BacnetParser {
             npdu,
             apdu,
         };
-        BacnetParserOutput::Record { record: rec, consumed: total }
+        BacnetParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
@@ -434,6 +455,9 @@ mod tests {
     #[test]
     fn short_buffer_needs_more() {
         let mut p = BacnetParser::default();
-        assert!(matches!(p.parse(&[0x81, 0x0a], Direction::Tx), BacnetParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0x81, 0x0a], Direction::Tx),
+            BacnetParserOutput::Need
+        ));
     }
 }

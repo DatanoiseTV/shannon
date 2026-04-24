@@ -215,9 +215,9 @@ fn is_private(ip: IpAddr) -> bool {
                 || v6.is_unspecified()
                 || v6.is_unique_local()
                 || v6.is_unicast_link_local()
-                || v6.to_ipv4_mapped().is_some_and(|v4| {
-                    v4.is_loopback() || v4.is_private() || v4.is_link_local()
-                })
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| v4.is_loopback() || v4.is_private() || v4.is_link_local())
         }
     }
 }
@@ -254,7 +254,11 @@ fn luhn_ok(d: &[u8]) -> bool {
         let v = u32::from(v);
         sum += if i % 2 == 1 {
             let doubled = v * 2;
-            if doubled > 9 { doubled - 9 } else { doubled }
+            if doubled > 9 {
+                doubled - 9
+            } else {
+                doubled
+            }
         } else {
             v
         };
@@ -269,11 +273,16 @@ fn find_ssn(text: &str) -> bool {
         return false;
     }
     for i in 0..=bytes.len() - 11 {
-        if !bytes[i].is_ascii_digit() || !bytes[i + 1].is_ascii_digit()
-            || !bytes[i + 2].is_ascii_digit() || bytes[i + 3] != b'-'
-            || !bytes[i + 4].is_ascii_digit() || !bytes[i + 5].is_ascii_digit()
-            || bytes[i + 6] != b'-' || !bytes[i + 7].is_ascii_digit()
-            || !bytes[i + 8].is_ascii_digit() || !bytes[i + 9].is_ascii_digit()
+        if !bytes[i].is_ascii_digit()
+            || !bytes[i + 1].is_ascii_digit()
+            || !bytes[i + 2].is_ascii_digit()
+            || bytes[i + 3] != b'-'
+            || !bytes[i + 4].is_ascii_digit()
+            || !bytes[i + 5].is_ascii_digit()
+            || bytes[i + 6] != b'-'
+            || !bytes[i + 7].is_ascii_digit()
+            || !bytes[i + 8].is_ascii_digit()
+            || !bytes[i + 9].is_ascii_digit()
             || !bytes[i + 10].is_ascii_digit()
         {
             continue;

@@ -561,7 +561,9 @@ fn parse_size(s: &str) -> Result<u64, String> {
         .char_indices()
         .find(|(_, c)| !c.is_ascii_digit() && *c != '.')
         .map_or((s, ""), |(i, _)| (&s[..i], &s[i..]));
-    let value: f64 = num.parse().map_err(|e| format!("invalid size number '{num}': {e}"))?;
+    let value: f64 = num
+        .parse()
+        .map_err(|e| format!("invalid size number '{num}': {e}"))?;
     let mul = match suffix.trim().to_ascii_lowercase().as_str() {
         "" | "b" => 1.0,
         "k" | "kb" | "kib" => 1024.0,
@@ -592,7 +594,10 @@ mod tests {
         assert_eq!(parse_size("1k").unwrap(), 1024);
         assert_eq!(parse_size("1K").unwrap(), 1024);
         assert_eq!(parse_size("100M").unwrap(), 100 * 1024 * 1024);
-        assert_eq!(parse_size("1.5G").unwrap(), ((1.5 * 1024.0 * 1024.0 * 1024.0) as u64));
+        assert_eq!(
+            parse_size("1.5G").unwrap(),
+            ((1.5 * 1024.0 * 1024.0 * 1024.0) as u64)
+        );
         assert!(parse_size("10X").is_err());
         assert!(parse_size("").is_err());
     }
@@ -612,7 +617,15 @@ mod tests {
     #[test]
     fn cli_parses_trace_with_filters() {
         let cli = Cli::try_parse_from([
-            "shannon", "trace", "-p", "100", "-p", "200", "--protocol", "http", "postgres",
+            "shannon",
+            "trace",
+            "-p",
+            "100",
+            "-p",
+            "200",
+            "--protocol",
+            "http",
+            "postgres",
         ])
         .unwrap();
         match cli.command {

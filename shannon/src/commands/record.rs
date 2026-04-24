@@ -20,7 +20,9 @@ use crate::events::{DecodedEvent, Direction};
 use crate::runtime::{FilterSetup, Runtime};
 
 pub fn run(_cli: &Cli, args: RecordArgs) -> Result<()> {
-    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     rt.block_on(async move { run_async(args).await })
 }
 
@@ -50,9 +52,8 @@ async fn run_async(args: RecordArgs) -> Result<()> {
     // Listen for SIGTERM as well as SIGINT so `kill` on the record
     // process flushes the writer cleanly instead of corrupting the
     // last zstd frame.
-    use tokio::signal::unix::{SignalKind, signal as unix_signal};
-    let mut sigterm =
-        unix_signal(SignalKind::terminate()).context("installing SIGTERM handler")?;
+    use tokio::signal::unix::{signal as unix_signal, SignalKind};
+    let mut sigterm = unix_signal(SignalKind::terminate()).context("installing SIGTERM handler")?;
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => break,
@@ -95,11 +96,14 @@ impl Sink {
         Ok(match compression {
             RecordCompression::None => Self::Plain(w),
             RecordCompression::Zstd => Self::Zstd(
-                zstd::stream::write::Encoder::new(w, 3).context("init zstd")?.auto_finish(),
+                zstd::stream::write::Encoder::new(w, 3)
+                    .context("init zstd")?
+                    .auto_finish(),
             ),
-            RecordCompression::Gz => {
-                Self::Gz(flate2::write::GzEncoder::new(w, flate2::Compression::default()))
-            }
+            RecordCompression::Gz => Self::Gz(flate2::write::GzEncoder::new(
+                w,
+                flate2::Compression::default(),
+            )),
         })
     }
 
@@ -131,10 +135,18 @@ impl Writer {
     fn open(args: &RecordArgs) -> Result<Self> {
         let path = args.output.clone();
         if !matches!(args.format, RecordFormat::Jsonl) {
-            anyhow::bail!("record format {:?} not yet implemented; use jsonl", args.format);
+            anyhow::bail!(
+                "record format {:?} not yet implemented; use jsonl",
+                args.format
+            );
         }
         let sink = Sink::new(&path, args.compress.clone())?;
-        Ok(Self { base_path: path, rotation_suffix: 0, current_bytes: 0, sink })
+        Ok(Self {
+            base_path: path,
+            rotation_suffix: 0,
+            current_bytes: 0,
+            sink,
+        })
     }
 
     fn write_line(&mut self, line: &[u8], args: &RecordArgs) -> Result<usize> {
@@ -153,7 +165,12 @@ impl Writer {
     fn rotate(&mut self, args: &RecordArgs) -> Result<()> {
         self.sink.flush()?;
         self.rotation_suffix += 1;
-        let stem = self.base_path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+        let stem = self
+            .base_path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
         let ext = self
             .base_path
             .extension()
@@ -236,7 +253,10 @@ enum JsonBody {
 }
 
 fn serialise(ev: &DecodedEvent) -> Vec<u8> {
-    let wall_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+    let wall_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
     match ev {
         DecodedEvent::ConnStart(ctx, c) => serde_json::to_vec(&JsonEvent {
             ts_ns: ctx.ts_ns,
@@ -377,8 +397,7 @@ const fn dir_label(d: Direction) -> &'static str {
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
-    const A: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     let chunks = bytes.chunks_exact(3);
     let tail = chunks.remainder();

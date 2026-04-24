@@ -188,7 +188,10 @@ impl StunParser {
             error_code,
             error_reason,
         };
-        StunParserOutput::Record { record: rec, consumed: total }
+        StunParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
@@ -196,9 +199,9 @@ fn decode_class_method(type_word: u16) -> (Class, u16) {
     // Method bits scattered per RFC 5389 §6:
     //   method  = M11..M7  M6..M4  M3..M0
     //   type    = 00 M11..M7 C1 M6..M4 C0 M3..M0
-    let m_hi = (type_word >> 9) & 0x1f;   // 5 bits
-    let m_mid = (type_word >> 5) & 0x07;  // 3 bits
-    let m_lo = type_word & 0x0f;          // 4 bits
+    let m_hi = (type_word >> 9) & 0x1f; // 5 bits
+    let m_mid = (type_word >> 5) & 0x07; // 3 bits
+    let m_lo = type_word & 0x0f; // 4 bits
     let method = (m_hi << 7) | (m_mid << 4) | m_lo;
     let c1 = (type_word >> 8) & 0x01;
     let c0 = (type_word >> 4) & 0x01;
@@ -265,7 +268,15 @@ fn decode_attributes(
         }
         attrs = &attrs[padded..];
     }
-    (xor_mapped, mapped, username, software, realm, error_code, error_reason)
+    (
+        xor_mapped,
+        mapped,
+        username,
+        software,
+        realm,
+        error_code,
+        error_reason,
+    )
 }
 
 fn decode_mapped(val: &[u8]) -> Option<MappedAddr> {
@@ -395,6 +406,9 @@ mod tests {
     #[test]
     fn short_buffer_needs_more() {
         let mut p = StunParser::default();
-        assert!(matches!(p.parse(&[0u8; 10], Direction::Tx), StunParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 10], Direction::Tx),
+            StunParserOutput::Need
+        ));
     }
 }

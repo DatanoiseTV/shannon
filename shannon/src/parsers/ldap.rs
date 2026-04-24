@@ -41,24 +41,52 @@ pub struct LdapRecord {
 
 #[derive(Debug, Clone)]
 pub enum LdapOp {
-    BindRequest { version: i64, dn: String, auth_mech: AuthMech },
-    BindResponse { result_code: u32, matched_dn: String, message: String },
-    SearchRequest { base_dn: String, scope: u8 },
-    SearchResultEntry { dn: String },
-    SearchResultDone { result_code: u32 },
+    BindRequest {
+        version: i64,
+        dn: String,
+        auth_mech: AuthMech,
+    },
+    BindResponse {
+        result_code: u32,
+        matched_dn: String,
+        message: String,
+    },
+    SearchRequest {
+        base_dn: String,
+        scope: u8,
+    },
+    SearchResultEntry {
+        dn: String,
+    },
+    SearchResultDone {
+        result_code: u32,
+    },
     UnbindRequest,
     AbandonRequest,
-    ExtendedRequest { oid: String },
-    ExtendedResponse { result_code: u32, oid: Option<String> },
-    ModifyRequest { dn: String },
-    AddRequest { dn: String },
-    DelRequest { dn: String },
-    Other { application_tag: u8 },
+    ExtendedRequest {
+        oid: String,
+    },
+    ExtendedResponse {
+        result_code: u32,
+        oid: Option<String>,
+    },
+    ModifyRequest {
+        dn: String,
+    },
+    AddRequest {
+        dn: String,
+    },
+    DelRequest {
+        dn: String,
+    },
+    Other {
+        application_tag: u8,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub enum AuthMech {
-    Simple,        // password is redacted — never stored
+    Simple, // password is redacted — never stored
     Sasl { mechanism: String },
     Unknown(u8),
 }
@@ -66,7 +94,11 @@ pub enum AuthMech {
 impl LdapRecord {
     pub fn display_line(&self) -> String {
         match &self.op {
-            LdapOp::BindRequest { version, dn, auth_mech } => {
+            LdapOp::BindRequest {
+                version,
+                dn,
+                auth_mech,
+            } => {
                 let auth = match auth_mech {
                     AuthMech::Simple => "simple <redacted>".to_string(),
                     AuthMech::Sasl { mechanism } => format!("sasl {mechanism}"),
@@ -80,7 +112,11 @@ impl LdapRecord {
                     auth,
                 )
             }
-            LdapOp::BindResponse { result_code, matched_dn, message } => format!(
+            LdapOp::BindResponse {
+                result_code,
+                matched_dn,
+                message,
+            } => format!(
                 "id={} BIND-RESP code={} ({})  dn={}  msg={}",
                 self.message_id,
                 result_code,
@@ -97,10 +133,9 @@ impl LdapRecord {
             LdapOp::SearchResultEntry { dn } => {
                 format!("id={} ENTRY dn={}", self.message_id, truncate(dn, 80))
             }
-            LdapOp::SearchResultDone { result_code } => format!(
-                "id={} SEARCH-DONE code={}",
-                self.message_id, result_code
-            ),
+            LdapOp::SearchResultDone { result_code } => {
+                format!("id={} SEARCH-DONE code={}", self.message_id, result_code)
+            }
             LdapOp::UnbindRequest => format!("id={} UNBIND", self.message_id),
             LdapOp::AbandonRequest => format!("id={} ABANDON", self.message_id),
             LdapOp::ExtendedRequest { oid } => {
@@ -115,12 +150,15 @@ impl LdapRecord {
             LdapOp::ModifyRequest { dn } => {
                 format!("id={} MODIFY dn={}", self.message_id, truncate(dn, 80))
             }
-            LdapOp::AddRequest { dn } => format!("id={} ADD dn={}", self.message_id, truncate(dn, 80)),
-            LdapOp::DelRequest { dn } => format!("id={} DEL dn={}", self.message_id, truncate(dn, 80)),
-            LdapOp::Other { application_tag } => format!(
-                "id={} op=app-{}",
-                self.message_id, application_tag
-            ),
+            LdapOp::AddRequest { dn } => {
+                format!("id={} ADD dn={}", self.message_id, truncate(dn, 80))
+            }
+            LdapOp::DelRequest { dn } => {
+                format!("id={} DEL dn={}", self.message_id, truncate(dn, 80))
+            }
+            LdapOp::Other { application_tag } => {
+                format!("id={} op=app-{}", self.message_id, application_tag)
+            }
         }
     }
 }
@@ -154,7 +192,11 @@ fn scope_name(n: u8) -> &'static str {
 }
 
 fn truncate(s: &str, n: usize) -> &str {
-    if s.len() <= n { s } else { &s[..n] }
+    if s.len() <= n {
+        s
+    } else {
+        &s[..n]
+    }
 }
 
 impl LdapParser {
@@ -195,7 +237,10 @@ impl LdapParser {
             self.bypass = true;
             return LdapParserOutput::Skip(total);
         };
-        LdapParserOutput::Record { record, consumed: total }
+        LdapParserOutput::Record {
+            record,
+            consumed: total,
+        }
     }
 }
 
@@ -248,7 +293,11 @@ fn decode_message(mut payload: &[u8], dir: Direction) -> Option<LdapRecord> {
     }
     let op_body = &payload[op_header..op_header + op_body_len];
     let op = decode_op(app_tag, op_body, dir)?;
-    Some(LdapRecord { direction: dir, message_id, op })
+    Some(LdapRecord {
+        direction: dir,
+        message_id,
+        op,
+    })
 }
 
 fn decode_op(app_tag: u8, body: &[u8], _dir: Direction) -> Option<LdapOp> {
@@ -278,12 +327,20 @@ fn decode_op(app_tag: u8, body: &[u8], _dir: Direction) -> Option<LdapOp> {
                     other => AuthMech::Unknown(other),
                 }
             };
-            Some(LdapOp::BindRequest { version, dn, auth_mech })
+            Some(LdapOp::BindRequest {
+                version,
+                dn,
+                auth_mech,
+            })
         }
         1 => {
             // BindResponse: { LDAPResult components }
             let (code, matched_dn, message) = decode_ldap_result(body)?;
-            Some(LdapOp::BindResponse { result_code: code, matched_dn, message })
+            Some(LdapOp::BindResponse {
+                result_code: code,
+                matched_dn,
+                message,
+            })
         }
         2 => Some(LdapOp::UnbindRequest),
         3 => {
@@ -339,16 +396,23 @@ fn decode_op(app_tag: u8, body: &[u8], _dir: Direction) -> Option<LdapOp> {
         24 => {
             // ExtendedResponse: SEQUENCE { LDAPResult components, [10] responseName, [11] responseValue }
             let (code, _, _) = decode_ldap_result(body)?;
-            Some(LdapOp::ExtendedResponse { result_code: code, oid: None })
+            Some(LdapOp::ExtendedResponse {
+                result_code: code,
+                oid: None,
+            })
         }
-        _ => Some(LdapOp::Other { application_tag: app_tag }),
+        _ => Some(LdapOp::Other {
+            application_tag: app_tag,
+        }),
     }
 }
 
 fn decode_ldap_result(body: &[u8]) -> Option<(u32, String, String)> {
     // resultCode ENUMERATED
     let (code_body, rest) = take_tagged(body, 0x0a)?;
-    let code = code_body.iter().fold(0u32, |acc, b| (acc << 8) | u32::from(*b));
+    let code = code_body
+        .iter()
+        .fold(0u32, |acc, b| (acc << 8) | u32::from(*b));
     let (matched_dn_body, rest) = take_tagged(rest, 0x04).unwrap_or((&b""[..], rest));
     let matched_dn = String::from_utf8_lossy(matched_dn_body).into_owned();
     let (msg_body, _rest) = take_tagged(rest, 0x04).unwrap_or((&b""[..], rest));
@@ -427,7 +491,11 @@ mod tests {
             LdapParserOutput::Record { record, consumed } => {
                 assert_eq!(record.message_id, 1);
                 match &record.op {
-                    LdapOp::BindRequest { version, dn, auth_mech } => {
+                    LdapOp::BindRequest {
+                        version,
+                        dn,
+                        auth_mech,
+                    } => {
                         assert_eq!(*version, 3);
                         assert_eq!(dn, "cn=admin,dc=example,dc=org");
                         assert!(matches!(auth_mech, AuthMech::Simple));
@@ -446,6 +514,9 @@ mod tests {
     #[test]
     fn non_ldap_bypasses() {
         let mut p = LdapParser::default();
-        assert!(matches!(p.parse(b"GET / HTTP/1.1\r\n", Direction::Tx), LdapParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(b"GET / HTTP/1.1\r\n", Direction::Tx),
+            LdapParserOutput::Skip(_)
+        ));
     }
 }

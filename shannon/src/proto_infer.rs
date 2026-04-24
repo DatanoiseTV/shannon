@@ -87,8 +87,7 @@ fn alt_types_comment(all: &[(WireType, u64)], primary: WireType) -> String {
     if alt.is_empty() {
         String::new()
     } else {
-        let parts: Vec<String> =
-            alt.iter().map(|(wt, n)| format!("{wt:?}×{n}")).collect();
+        let parts: Vec<String> = alt.iter().map(|(wt, n)| format!("{wt:?}×{n}")).collect();
         format!(" (alt: {})", parts.join(", "))
     }
 }
@@ -151,7 +150,11 @@ pub fn infer_corpus(
                         *seen_this_msg.entry(f.tag).or_default() += 1;
                     }
                     for f in &dec.fields {
-                        profile_absorb(&mut local, f, seen_this_msg.get(&f.tag).copied().unwrap_or(1));
+                        profile_absorb(
+                            &mut local,
+                            f,
+                            seen_this_msg.get(&f.tag).copied().unwrap_or(1),
+                        );
                     }
                 }
                 local
@@ -180,7 +183,11 @@ pub fn infer_corpus(
         .map(|(tag, prof)| prof.finalise(tag))
         .collect();
     fields.sort_by_key(|f| f.tag);
-    let confidence = if scanned_n == 0 { 0.0 } else { (fully_n as f64) / (scanned_n as f64) };
+    let confidence = if scanned_n == 0 {
+        0.0
+    } else {
+        (fully_n as f64) / (scanned_n as f64)
+    };
 
     Ok(InferredSchema {
         name: message_name.to_string(),
@@ -200,8 +207,7 @@ fn load_samples(dir: &Path) -> Result<Vec<Vec<u8>>> {
 }
 
 fn walk(dir: &Path, out: &mut Vec<Vec<u8>>) -> Result<()> {
-    let entries =
-        fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))?;
+    let entries = fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))?;
     for entry in entries.flatten() {
         let path = entry.path();
         let meta = match entry.metadata() {
@@ -223,7 +229,7 @@ fn walk(dir: &Path, out: &mut Vec<Vec<u8>>) -> Result<()> {
 
 #[derive(Default, Clone)]
 struct FieldProfile {
-    wire_counts: HashMap<u8, u64>, // discriminant → count
+    wire_counts: HashMap<u8, u64>,       // discriminant → count
     wire_samples: HashMap<u8, WireType>, // keep one real WireType per discriminant
     str_count: u64,
     bytes_count: u64,
@@ -259,7 +265,11 @@ impl FieldProfile {
             .max_by_key(|(_, n)| **n)
             .map(|(k, v)| (*k, *v))
             .unwrap_or((2, 0));
-        let primary = self.wire_samples.get(&prim_disc).copied().unwrap_or(WireType::Len);
+        let primary = self
+            .wire_samples
+            .get(&prim_disc)
+            .copied()
+            .unwrap_or(WireType::Len);
 
         let proto_type = match primary {
             WireType::Varint => {
@@ -319,11 +329,7 @@ fn wire_disc(wt: &WireType) -> u8 {
     }
 }
 
-fn profile_absorb(
-    map: &mut HashMap<u32, FieldProfile>,
-    f: &DecodedField,
-    repeated_in_this: u64,
-) {
+fn profile_absorb(map: &mut HashMap<u32, FieldProfile>, f: &DecodedField, repeated_in_this: u64) {
     let prof = map.entry(f.tag).or_default();
     let disc = wire_disc(&f.wire_type);
     *prof.wire_counts.entry(disc).or_default() += 1;

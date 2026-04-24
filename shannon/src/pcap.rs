@@ -32,7 +32,7 @@ use anyhow::{Context, Result};
 
 /// `DLT_RAW` = 12. Each record is a raw IPv4 or IPv6 packet.
 const DLT_RAW: u32 = 101; // DLT_RAW_IP in classic pcap (value differs by system);
-                           // wireshark accepts 101 (LINKTYPE_RAW) which is the portable id.
+                          // wireshark accepts 101 (LINKTYPE_RAW) which is the portable id.
 const PCAP_MAGIC: u32 = 0xa1b2c3d4;
 
 const MAX_SNAPLEN: u32 = 65_535;
@@ -74,7 +74,11 @@ impl PcapWriter {
         w.write_all(&0u32.to_le_bytes())?; // sigfigs
         w.write_all(&MAX_SNAPLEN.to_le_bytes())?; // snaplen
         w.write_all(&DLT_RAW.to_le_bytes())?; // linktype = raw IP
-        Ok(Self { file: w, flows: HashMap::new(), packets_written: 0 })
+        Ok(Self {
+            file: w,
+            flows: HashMap::new(),
+            packets_written: 0,
+        })
     }
 
     pub fn packets(&self) -> u64 {
@@ -110,7 +114,12 @@ impl PcapWriter {
         } else {
             ((dst, dport), (src, sport), true)
         };
-        let flow = FlowId { src: client.0, sport: client.1, dst: server.0, dport: server.1 };
+        let flow = FlowId {
+            src: client.0,
+            sport: client.1,
+            dst: server.0,
+            dport: server.1,
+        };
         let tcp_state = self.flows.entry(flow).or_default();
 
         let is_c2s = matches!(
@@ -176,7 +185,9 @@ impl PcapWriter {
         pkt.extend_from_slice(payload);
 
         // Per-packet record header.
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
         let ts_sec = now.as_secs() as u32;
         let ts_usec = now.subsec_micros();
         self.file.write_all(&ts_sec.to_le_bytes())?;
@@ -224,7 +235,8 @@ mod tests {
         let mut w = PcapWriter::create(tmp.path()).unwrap();
         let src: IpAddr = "::1".parse().unwrap();
         let dst: IpAddr = "2001:db8::1".parse().unwrap();
-        w.write_segment(src, 1234, dst, 443, Direction::ClientToServer, b"hi").unwrap();
+        w.write_segment(src, 1234, dst, 443, Direction::ClientToServer, b"hi")
+            .unwrap();
         w.flush().unwrap();
         let n = std::fs::metadata(tmp.path()).unwrap().len();
         assert!(n > 24);

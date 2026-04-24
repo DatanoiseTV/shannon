@@ -38,8 +38,8 @@ use crate::parsers::{
     kafka::{KafkaParser, KafkaParserOutput, KafkaRecord},
     kerberos::{KerberosParser, KerberosParserOutput, KerberosRecord},
     ldap::{LdapParser, LdapParserOutput, LdapRecord},
-    modbus::{ModbusParser, ModbusParserOutput, ModbusRecord},
     memcached::{McParserOutput, McRecord, MemcachedParser},
+    modbus::{ModbusParser, ModbusParserOutput, ModbusRecord},
     mongodb::{MongoParser, MongoParserOutput, MongoRecord},
     mqtt::{MqttParser, MqttParserOutput, MqttRecord},
     mssql::{MssqlParser, MssqlParserOutput, MssqlRecord},
@@ -304,7 +304,13 @@ impl AnyRecord {
             Self::Nfs(_) => "nfs",
             Self::Rtsp(_) => "rtsp",
             Self::Smpp(_) => "smpp",
-            Self::Dns(r) => if r.multicast { "mdns" } else { "dns" },
+            Self::Dns(r) => {
+                if r.multicast {
+                    "mdns"
+                } else {
+                    "dns"
+                }
+            }
             Self::Quic(_) => "quic",
         }
     }
@@ -680,8 +686,8 @@ fn signature(buf: &[u8]) -> Option<Protocol> {
     if let Some(space) = buf.iter().take(8).position(|&b| b == b' ') {
         if buf[..space].iter().all(|b| b.is_ascii_uppercase()) {
             const METHODS: &[&[u8]] = &[
-                b"GET", b"PUT", b"POST", b"HEAD", b"DELETE",
-                b"OPTIONS", b"PATCH", b"CONNECT", b"TRACE",
+                b"GET", b"PUT", b"POST", b"HEAD", b"DELETE", b"OPTIONS", b"PATCH", b"CONNECT",
+                b"TRACE",
             ];
             if METHODS.iter().any(|m| m == &&buf[..space]) {
                 return Some(Protocol::Http1);
@@ -689,8 +695,18 @@ fn signature(buf: &[u8]) -> Option<Protocol> {
         }
     }
     for verb in [
-        &b"PING"[..], b"PONG", b"INFO ", b"CONNECT ", b"PUB ",
-        b"SUB ", b"MSG ", b"HPUB ", b"HMSG ", b"UNSUB ", b"+OK", b"-ERR",
+        &b"PING"[..],
+        b"PONG",
+        b"INFO ",
+        b"CONNECT ",
+        b"PUB ",
+        b"SUB ",
+        b"MSG ",
+        b"HPUB ",
+        b"HMSG ",
+        b"UNSUB ",
+        b"+OK",
+        b"-ERR",
     ] {
         if buf.starts_with(verb) {
             return Some(Protocol::Nats);
@@ -730,8 +746,7 @@ fn signature(buf: &[u8]) -> Option<Protocol> {
     if buf.len() >= 16 {
         let msg_len = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
         let op = u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]);
-        if (16..=48 * 1024 * 1024).contains(&msg_len)
-            && matches!(op, 1 | 2001..=2007 | 2010..=2013)
+        if (16..=48 * 1024 * 1024).contains(&msg_len) && matches!(op, 1 | 2001..=2007 | 2010..=2013)
         {
             return Some(Protocol::Mongodb);
         }
@@ -771,7 +786,9 @@ fn drive_http1(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Http1(Box::new(record)));
             }
             Http1Output::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -794,7 +811,9 @@ fn drive_http2(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Http2(Box::new(record)));
             }
             Http2ParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -817,7 +836,9 @@ fn drive_postgres(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Postgres(Box::new(record)));
             }
             PgParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -840,7 +861,9 @@ fn drive_mysql(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Mysql(Box::new(record)));
             }
             MysqlParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -863,7 +886,9 @@ fn drive_redis(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Redis(Box::new(record)));
             }
             RedisParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -886,7 +911,9 @@ fn drive_mongodb(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Mongodb(Box::new(record)));
             }
             MongoParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -909,7 +936,9 @@ fn drive_kafka(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Kafka(Box::new(record)));
             }
             KafkaParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -934,7 +963,9 @@ fn drive_cassandra(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Cassandra(record));
             }
             CqlParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -957,7 +988,9 @@ fn drive_memcached(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Memcached(Box::new(record)));
             }
             McParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -980,7 +1013,9 @@ fn drive_mqtt(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Mqtt(Box::new(record)));
             }
             MqttParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1003,7 +1038,9 @@ fn drive_nats(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Nats(Box::new(record)));
             }
             NatsParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1026,7 +1063,9 @@ fn drive_websocket(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::WebSocket(Box::new(record)));
             }
             WsParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1049,7 +1088,9 @@ fn drive_pop3(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Pop3(Box::new(record)));
             }
             Pop3ParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1072,7 +1113,9 @@ fn drive_smtp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Smtp(Box::new(record)));
             }
             SmtpParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1095,7 +1138,9 @@ fn drive_imap(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Imap(Box::new(record)));
             }
             ImapParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1118,7 +1163,9 @@ fn drive_modbus(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Modbus(Box::new(record)));
             }
             ModbusParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1141,7 +1188,9 @@ fn drive_ldap(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Ldap(Box::new(record)));
             }
             LdapParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1164,7 +1213,9 @@ fn drive_opcua(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::OpcUa(Box::new(record)));
             }
             OpcuaParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1187,7 +1238,9 @@ fn drive_iec104(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Iec104(Box::new(record)));
             }
             Iec104ParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1210,7 +1263,9 @@ fn drive_ssh(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Ssh(Box::new(record)));
             }
             SshParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1233,7 +1288,9 @@ fn drive_dnp3(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Dnp3(Box::new(record)));
             }
             Dnp3ParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1256,7 +1313,9 @@ fn drive_s7(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::S7(Box::new(record)));
             }
             S7ParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1279,7 +1338,9 @@ fn drive_enip(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Enip(Box::new(record)));
             }
             EnipParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1302,7 +1363,9 @@ fn drive_bacnet(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Bacnet(Box::new(record)));
             }
             BacnetParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1325,7 +1388,9 @@ fn drive_stun(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Stun(Box::new(record)));
             }
             StunParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1348,7 +1413,9 @@ fn drive_ftp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Ftp(Box::new(record)));
             }
             FtpParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1371,7 +1438,9 @@ fn drive_sip(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Sip(Box::new(record)));
             }
             SipParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1394,7 +1463,9 @@ fn drive_tls(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Tls(Box::new(record)));
             }
             TlsParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1417,7 +1488,9 @@ fn drive_rdp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Rdp(Box::new(record)));
             }
             RdpParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1440,7 +1513,9 @@ fn drive_socks(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Socks(Box::new(record)));
             }
             SocksParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1463,7 +1538,9 @@ fn drive_telnet(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Telnet(Box::new(record)));
             }
             TelnetParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1486,7 +1563,9 @@ fn drive_ntp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Ntp(Box::new(record)));
             }
             NtpParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1509,7 +1588,9 @@ fn drive_radius(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Radius(Box::new(record)));
             }
             RadiusParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1532,7 +1613,9 @@ fn drive_syslog(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Syslog(Box::new(record)));
             }
             SyslogParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1555,7 +1638,9 @@ fn drive_amqp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Amqp(Box::new(record)));
             }
             AmqpParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1578,7 +1663,9 @@ fn drive_kerberos(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Kerberos(Box::new(record)));
             }
             KerberosParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1601,7 +1688,9 @@ fn drive_oracle(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Oracle(Box::new(record)));
             }
             OracleParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1624,7 +1713,9 @@ fn drive_mssql(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Mssql(Box::new(record)));
             }
             MssqlParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1647,7 +1738,9 @@ fn drive_dhcp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Dhcp(Box::new(record)));
             }
             DhcpParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1670,7 +1763,9 @@ fn drive_tftp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Tftp(Box::new(record)));
             }
             TftpParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1693,7 +1788,9 @@ fn drive_tacacs(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Tacacs(Box::new(record)));
             }
             TacacsParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1716,7 +1813,9 @@ fn drive_snmp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Snmp(Box::new(record)));
             }
             SnmpParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1739,7 +1838,9 @@ fn drive_smb(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Smb(Box::new(record)));
             }
             SmbParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1762,7 +1863,9 @@ fn drive_wireguard(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::WireGuard(Box::new(record)));
             }
             WireguardParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1785,7 +1888,9 @@ fn drive_irc(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Irc(Box::new(record)));
             }
             IrcParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1808,7 +1913,9 @@ fn drive_nfs(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Nfs(Box::new(record)));
             }
             NfsParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1831,7 +1938,9 @@ fn drive_rtsp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Rtsp(Box::new(record)));
             }
             RtspParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1854,7 +1963,9 @@ fn drive_smpp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Smpp(Box::new(record)));
             }
             SmppParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1868,7 +1979,11 @@ fn drive_dns(state: &mut FlowState, dir: Direction, mdns: bool) -> Vec<AnyRecord
         Direction::Rx => (&mut state.rx, &mut state.parser_rx.dns),
     };
     let parser = slot.get_or_insert_with(|| {
-        if mdns { DnsParser::new_mdns() } else { DnsParser::default() }
+        if mdns {
+            DnsParser::new_mdns()
+        } else {
+            DnsParser::default()
+        }
     });
     let mut out = Vec::new();
     loop {
@@ -1879,7 +1994,9 @@ fn drive_dns(state: &mut FlowState, dir: Direction, mdns: bool) -> Vec<AnyRecord
                 out.push(AnyRecord::Dns(Box::new(record)));
             }
             DnsParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }
@@ -1902,7 +2019,9 @@ fn drive_quic(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Quic(Box::new(record)));
             }
             QuicParserOutput::Skip(n) => {
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
                 half.consume(n);
             }
         }

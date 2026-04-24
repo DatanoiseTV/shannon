@@ -7,14 +7,14 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use aya::Ebpf;
 use aya::maps::{HashMap as BpfHashMap, MapData, RingBuf};
 use aya::programs::{KProbe, TracePoint, UProbe};
+use aya::Ebpf;
 use tokio::sync::mpsc;
 
 use shannon_common::EventHeader;
 
-use crate::events::{DecodedEvent, decode};
+use crate::events::{decode, DecodedEvent};
 
 /// The embedded BPF object. Built by `build.rs`.
 ///
@@ -26,8 +26,11 @@ static SHANNON_EBPF_OBJ: &[u8] = include_bytes!(env!("SHANNON_EBPF_OBJ"));
 /// Sanity-logging helper. Debug-only; lets us verify at runtime that the
 /// embedded bytes are what we think they are.
 fn log_obj_prelude() {
-    let prelude: Vec<String> =
-        SHANNON_EBPF_OBJ.iter().take(8).map(|b| format!("{b:02x}")).collect();
+    let prelude: Vec<String> = SHANNON_EBPF_OBJ
+        .iter()
+        .take(8)
+        .map(|b| format!("{b:02x}"))
+        .collect();
     tracing::debug!(
         bytes_len = SHANNON_EBPF_OBJ.len(),
         magic = prelude.join(" "),
@@ -90,7 +93,12 @@ impl Runtime {
         // specific probe that failed, not the whole batch.
         attach_kprobe(&mut bpf, "tcp_v4_connect", "tcp_v4_connect")?;
         attach_kprobe(&mut bpf, "tcp_v6_connect", "tcp_v6_connect")?;
-        attach_tracepoint(&mut bpf, "inet_sock_set_state", "sock", "inet_sock_set_state")?;
+        attach_tracepoint(
+            &mut bpf,
+            "inet_sock_set_state",
+            "sock",
+            "inet_sock_set_state",
+        )?;
         attach_kprobe(&mut bpf, "tcp_sendmsg", "tcp_sendmsg")?;
         attach_kprobe(&mut bpf, "tcp_recvmsg", "tcp_recvmsg")?;
         attach_kretprobe(&mut bpf, "tcp_recvmsg_ret", "tcp_recvmsg")?;
@@ -103,7 +111,12 @@ impl Runtime {
         attach_kretprobe(&mut bpf, "udp_recvmsg_ret", "udp_recvmsg")?;
 
         if filter.follow_children {
-            attach_tracepoint(&mut bpf, "sched_process_fork", "sched", "sched_process_fork")?;
+            attach_tracepoint(
+                &mut bpf,
+                "sched_process_fork",
+                "sched",
+                "sched_process_fork",
+            )?;
         }
 
         // TLS: attach to every libssl we can find on the host. Missing is
@@ -153,7 +166,10 @@ impl Runtime {
 }
 
 fn bump_memlock_rlimit() -> Result<()> {
-    let lim = libc::rlimit { rlim_cur: libc::RLIM_INFINITY, rlim_max: libc::RLIM_INFINITY };
+    let lim = libc::rlimit {
+        rlim_cur: libc::RLIM_INFINITY,
+        rlim_max: libc::RLIM_INFINITY,
+    };
     // SAFETY: setrlimit is always-safe; we pass a valid pointer.
     let rc = unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &lim) };
     if rc != 0 {
@@ -169,28 +185,31 @@ fn set_self_pid(bpf: &mut Ebpf) -> Result<()> {
     let mut self_pid: BpfHashMap<&mut MapData, u32, u8> =
         BpfHashMap::try_from(bpf.map_mut("SELF_PID").context("map SELF_PID missing")?)?;
     let tgid = std::process::id();
-    self_pid.insert(tgid, 1u8, 0).context("writing SELF_PID entry")?;
+    self_pid
+        .insert(tgid, 1u8, 0)
+        .context("writing SELF_PID entry")?;
     Ok(())
 }
 
 fn set_pid_filter(bpf: &mut Ebpf, pids: &[u32]) -> Result<()> {
-    let mut filter: BpfHashMap<&mut MapData, u32, u8> =
-        BpfHashMap::try_from(bpf.map_mut("PID_FILTER").context("map PID_FILTER missing")?)?;
+    let mut filter: BpfHashMap<&mut MapData, u32, u8> = BpfHashMap::try_from(
+        bpf.map_mut("PID_FILTER")
+            .context("map PID_FILTER missing")?,
+    )?;
     // Sentinel u32::MAX means "filter active" — we can't use 0 because
     // softirq context reports tgid=0 and would collide.
-    filter.insert(u32::MAX, 1u8, 0).context("writing PID_FILTER sentinel")?;
+    filter
+        .insert(u32::MAX, 1u8, 0)
+        .context("writing PID_FILTER sentinel")?;
     for &pid in pids {
-        filter.insert(pid, 1u8, 0).with_context(|| format!("writing PID_FILTER[{pid}]"))?;
+        filter
+            .insert(pid, 1u8, 0)
+            .with_context(|| format!("writing PID_FILTER[{pid}]"))?;
     }
     Ok(())
 }
 
-fn attach_tracepoint(
-    bpf: &mut Ebpf,
-    program: &str,
-    category: &str,
-    name: &str,
-) -> Result<()> {
+fn attach_tracepoint(bpf: &mut Ebpf, program: &str, category: &str, name: &str) -> Result<()> {
     let prog: &mut TracePoint = bpf
         .program_mut(program)
         .with_context(|| format!("program {program} not in BPF object"))?
@@ -247,7 +266,9 @@ fn libssl_candidates() -> Vec<std::path::PathBuf> {
         "/lib64/libssl.so.1.1",
     ] {
         let p = PathBuf::from(raw);
-        let Ok(canon) = p.canonicalize() else { continue };
+        let Ok(canon) = p.canonicalize() else {
+            continue;
+        };
         if seen.insert(canon.clone()) {
             out.push(p);
         }
@@ -284,7 +305,9 @@ fn libsqlite3_candidates() -> Vec<std::path::PathBuf> {
         "/lib64/libsqlite3.so.0",
     ] {
         let p = PathBuf::from(raw);
-        let Ok(canon) = p.canonicalize() else { continue };
+        let Ok(canon) = p.canonicalize() else {
+            continue;
+        };
         if seen.insert(canon.clone()) {
             out.push(p);
         }
@@ -383,11 +406,16 @@ fn attach_uprobe(
         .with_context(|| format!("program {program} is not a UProbe"))?;
     prog.load().with_context(|| format!("loading {program}"))?;
     let _ = is_ret; // aya picks uprobe vs uretprobe from the program type,
-    // which in turn comes from the #[uprobe] / #[uretprobe] attribute on
-    // the BPF side — the `ret` flag here is informational for logging.
-    prog.attach(Some(function), 0, target, None).with_context(|| {
-        format!("attaching {program} to {} in {}", function, target.display())
-    })?;
+                    // which in turn comes from the #[uprobe] / #[uretprobe] attribute on
+                    // the BPF side — the `ret` flag here is informational for logging.
+    prog.attach(Some(function), 0, target, None)
+        .with_context(|| {
+            format!(
+                "attaching {program} to {} in {}",
+                function,
+                target.display()
+            )
+        })?;
     Ok(())
 }
 
@@ -398,27 +426,29 @@ fn spawn_ringbuf_reader(bpf: &mut Ebpf, tx: mpsc::Sender<DecodedEvent>) -> Resul
     // Synchronous drain driven by tokio's blocking task; the ring buffer API
     // in aya 0.13 is sync, and events are small so a single background
     // thread is enough.
-    std::thread::Builder::new().name("shannon-ringbuf".into()).spawn(move || {
-        loop {
-            let mut guard = ring.lock();
-            while let Some(record) = guard.next() {
-                if record.len() < size_of::<EventHeader>() {
-                    tracing::warn!(len = record.len(), "ringbuf record smaller than header");
-                    continue;
-                }
-                match decode(&record) {
-                    Ok(ev) => {
-                        // If the channel is closed, we're shutting down.
-                        if tx.blocking_send(ev).is_err() {
-                            return;
-                        }
+    std::thread::Builder::new()
+        .name("shannon-ringbuf".into())
+        .spawn(move || {
+            loop {
+                let mut guard = ring.lock();
+                while let Some(record) = guard.next() {
+                    if record.len() < size_of::<EventHeader>() {
+                        tracing::warn!(len = record.len(), "ringbuf record smaller than header");
+                        continue;
                     }
-                    Err(err) => tracing::debug!(%err, "decode failed"),
+                    match decode(&record) {
+                        Ok(ev) => {
+                            // If the channel is closed, we're shutting down.
+                            if tx.blocking_send(ev).is_err() {
+                                return;
+                            }
+                        }
+                        Err(err) => tracing::debug!(%err, "decode failed"),
+                    }
                 }
+                drop(guard);
+                std::thread::sleep(std::time::Duration::from_millis(5));
             }
-            drop(guard);
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
-    })?;
+        })?;
     Ok(())
 }

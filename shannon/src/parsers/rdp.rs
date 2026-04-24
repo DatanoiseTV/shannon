@@ -36,7 +36,10 @@ pub struct RdpParser {
 
 impl Default for RdpParser {
     fn default() -> Self {
-        Self { bypass: false, done: false }
+        Self {
+            bypass: false,
+            done: false,
+        }
     }
 }
 
@@ -247,7 +250,10 @@ mod tests {
     #[test]
     fn short_buffer_needs_more() {
         let mut p = RdpParser::default();
-        assert!(matches!(p.parse(&[0x03, 0x00], Direction::Tx), RdpParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0x03, 0x00], Direction::Tx),
+            RdpParserOutput::Need
+        ));
     }
 
     #[test]

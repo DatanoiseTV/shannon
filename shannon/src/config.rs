@@ -32,8 +32,9 @@ impl Config {
     /// exist. Parse errors are reported.
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         match std::fs::read_to_string(path) {
-            Ok(body) => toml::from_str(&body)
-                .with_context(|| format!("parsing config {}", path.display())),
+            Ok(body) => {
+                toml::from_str(&body).with_context(|| format!("parsing config {}", path.display()))
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(anyhow::Error::from(e).context(format!("reading {}", path.display()))),
         }
@@ -94,7 +95,8 @@ mod toml {
                 }
                 return Ok(Value::Array(out));
             }
-            if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\''))
+            if (s.starts_with('"') && s.ends_with('"'))
+                || (s.starts_with('\'') && s.ends_with('\''))
             {
                 return Ok(Value::String(s[1..s.len() - 1].to_string()));
             }

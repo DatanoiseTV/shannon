@@ -47,7 +47,10 @@ pub struct TlsParser {
 
 impl Default for TlsParser {
     fn default() -> Self {
-        Self { bypass: false, done: false }
+        Self {
+            bypass: false,
+            done: false,
+        }
     }
 }
 
@@ -135,7 +138,11 @@ impl TlsRecord {
         } else {
             format!(" alpn={}", self.alpn.join(","))
         };
-        let cipher = match (self.kind, self.server_cipher_suite, self.cipher_suites.len()) {
+        let cipher = match (
+            self.kind,
+            self.server_cipher_suite,
+            self.cipher_suites.len(),
+        ) {
             (HelloKind::Server, Some(c), _) => format!(" cipher=0x{c:04x}"),
             (HelloKind::Client, _, n) => format!(" ciphers={n}"),
             _ => String::new(),
@@ -202,7 +209,10 @@ impl TlsParser {
         match record {
             Some(r) => {
                 self.done = true;
-                TlsParserOutput::Record { record: r, consumed: total }
+                TlsParserOutput::Record {
+                    record: r,
+                    consumed: total,
+                }
             }
             None => {
                 self.bypass = true;
@@ -294,7 +304,11 @@ fn parse_server_hello(hs: &[u8], dir: Direction, record_version: u16) -> Option<
     let negotiated_tls13 = supported_versions.iter().any(|&v| v == 0x0304);
     // Actionable protocol-hygiene warnings, server-side only.
     let mut warnings = Vec::new();
-    let effective_version = if negotiated_tls13 { 0x0304 } else { handshake_version };
+    let effective_version = if negotiated_tls13 {
+        0x0304
+    } else {
+        handshake_version
+    };
     match effective_version {
         0x0300 => warnings.push(TlsWarning::LegacyVersion("SSL 3.0")),
         0x0301 => warnings.push(TlsWarning::LegacyVersion("TLS 1.0")),
@@ -328,21 +342,39 @@ fn parse_server_hello(hs: &[u8], dir: Direction, record_version: u16) -> Option<
 fn classify_cipher_suite(id: u16) -> Vec<TlsWarning> {
     let mut out = Vec::new();
     // Well-known TLS_RSA_WITH_NULL_* and TLS_ECDH_*_NULL_* lines.
-    if matches!(id, 0x0001 | 0x0002 | 0x003B | 0xC001 | 0xC006 | 0xC00B | 0xC010 | 0xC015) {
+    if matches!(
+        id,
+        0x0001 | 0x0002 | 0x003B | 0xC001 | 0xC006 | 0xC00B | 0xC010 | 0xC015
+    ) {
         out.push(TlsWarning::NullCipher);
     }
     // EXPORT-grade (40/56-bit). Covers RSA-EXPORT-RC4-40, RSA-EXPORT-
     // DES40-CBC-SHA, DHE-DSS-EXPORT-DES40-CBC-SHA, …
-    if matches!(id, 0x0003 | 0x0006 | 0x0008 | 0x000B | 0x000E | 0x0011 | 0x0014 | 0x0017 | 0x0019) {
+    if matches!(
+        id,
+        0x0003 | 0x0006 | 0x0008 | 0x000B | 0x000E | 0x0011 | 0x0014 | 0x0017 | 0x0019
+    ) {
         out.push(TlsWarning::ExportCipher);
     }
     // RC4 anywhere in the suite.
     if matches!(
         id,
-        0x0004 | 0x0005 | 0x0018 | 0x001E
-            | 0x0020 | 0x0024 | 0x0028 | 0x002B
-            | 0x008A | 0x008E | 0x0092
-            | 0xC002 | 0xC007 | 0xC00C | 0xC011 | 0xC016
+        0x0004
+            | 0x0005
+            | 0x0018
+            | 0x001E
+            | 0x0020
+            | 0x0024
+            | 0x0028
+            | 0x002B
+            | 0x008A
+            | 0x008E
+            | 0x0092
+            | 0xC002
+            | 0xC007
+            | 0xC00C
+            | 0xC011
+            | 0xC016
             | 0xC033
     ) {
         out.push(TlsWarning::Rc4);
@@ -350,9 +382,20 @@ fn classify_cipher_suite(id: u16) -> Vec<TlsWarning> {
     // 3DES-CBC-SHA family.
     if matches!(
         id,
-        0x000A | 0x000D | 0x0010 | 0x0013 | 0x0016 | 0x001B
-            | 0x008B | 0x008F | 0x0093
-            | 0xC003 | 0xC008 | 0xC00D | 0xC012 | 0xC017
+        0x000A
+            | 0x000D
+            | 0x0010
+            | 0x0013
+            | 0x0016
+            | 0x001B
+            | 0x008B
+            | 0x008F
+            | 0x0093
+            | 0xC003
+            | 0xC008
+            | 0xC00D
+            | 0xC012
+            | 0xC017
     ) {
         out.push(TlsWarning::TripleDes);
     }
@@ -415,7 +458,9 @@ fn parse_sni(body: &[u8]) -> Option<String> {
             return None;
         }
         if nt == 0 {
-            return std::str::from_utf8(&body[p..p + nl]).ok().map(|s| s.to_string());
+            return std::str::from_utf8(&body[p..p + nl])
+                .ok()
+                .map(|s| s.to_string());
         }
         p += nl;
     }
@@ -560,7 +605,10 @@ mod tests {
     #[test]
     fn short_buffer_needs_more() {
         let mut p = TlsParser::default();
-        assert!(matches!(p.parse(&[0x16, 0x03, 0x01], Direction::Tx), TlsParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0x16, 0x03, 0x01], Direction::Tx),
+            TlsParserOutput::Need
+        ));
     }
 
     /// Build a minimal ServerHello picking `handshake_version` and
@@ -572,7 +620,7 @@ mod tests {
         hs.push(0); // sid len
         hs.extend_from_slice(&cipher.to_be_bytes());
         hs.push(0); // compression null
-        // no extensions block
+                    // no extensions block
         let mut record = Vec::new();
         record.push(HANDSHAKE);
         record.extend_from_slice(&0x0303u16.to_be_bytes()); // record version
@@ -597,7 +645,9 @@ mod tests {
         match p.parse(&buf, Direction::Rx) {
             TlsParserOutput::Record { record, .. } => {
                 assert_eq!(record.kind, HelloKind::Server);
-                assert!(record.warnings.contains(&TlsWarning::LegacyVersion("TLS 1.0")));
+                assert!(record
+                    .warnings
+                    .contains(&TlsWarning::LegacyVersion("TLS 1.0")));
                 assert!(record.warnings.contains(&TlsWarning::Rc4));
             }
             _ => panic!(),

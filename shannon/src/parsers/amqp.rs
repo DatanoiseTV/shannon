@@ -31,7 +31,10 @@ pub struct AmqpParser {
 
 impl Default for AmqpParser {
     fn default() -> Self {
-        Self { bypass: false, greeting_checked: false }
+        Self {
+            bypass: false,
+            greeting_checked: false,
+        }
     }
 }
 
@@ -49,7 +52,11 @@ pub struct AmqpRecord {
 
 #[derive(Debug, Clone)]
 pub enum AmqpKind {
-    ProtocolHeader { major: u8, minor: u8, revision: u8 },
+    ProtocolHeader {
+        major: u8,
+        minor: u8,
+        revision: u8,
+    },
     Method {
         channel: u16,
         class: u16,
@@ -60,15 +67,26 @@ pub enum AmqpKind {
         routing_key: Option<String>,
         queue: Option<String>,
     },
-    Header { channel: u16, class: u16, body_size: u64 },
-    Body { channel: u16, bytes: u32 },
+    Header {
+        channel: u16,
+        class: u16,
+        body_size: u64,
+    },
+    Body {
+        channel: u16,
+        bytes: u32,
+    },
     Heartbeat,
 }
 
 impl AmqpRecord {
     pub fn display_line(&self) -> String {
         match &self.kind {
-            AmqpKind::ProtocolHeader { major, minor, revision } => {
+            AmqpKind::ProtocolHeader {
+                major,
+                minor,
+                revision,
+            } => {
                 format!("amqp banner {major}.{minor}.{revision}")
             }
             AmqpKind::Method {
@@ -92,7 +110,11 @@ impl AmqpRecord {
                 }
                 format!("amqp ch={channel} {class_name}.{method_name}{extra}")
             }
-            AmqpKind::Header { channel, class, body_size } => {
+            AmqpKind::Header {
+                channel,
+                class,
+                body_size,
+            } => {
                 format!("amqp ch={channel} HEADER class={class} body={body_size}B")
             }
             AmqpKind::Body { channel, bytes } => {
@@ -153,7 +175,10 @@ impl AmqpParser {
         let kind = match ftype {
             1 => decode_method(channel, payload),
             2 => decode_header(channel, payload),
-            3 => AmqpKind::Body { channel, bytes: size as u32 },
+            3 => AmqpKind::Body {
+                channel,
+                bytes: size as u32,
+            },
             4 => AmqpKind::Heartbeat,
             _ => {
                 self.bypass = true;
@@ -161,7 +186,10 @@ impl AmqpParser {
             }
         };
         AmqpParserOutput::Record {
-            record: AmqpRecord { direction: dir, kind },
+            record: AmqpRecord {
+                direction: dir,
+                kind,
+            },
             consumed: total,
         }
     }
@@ -205,13 +233,23 @@ fn decode_header(channel: u16, payload: &[u8]) -> AmqpKind {
     // weight u16 (payload[2..4]), body-size u64 (payload[4..12])
     let body_size = if payload.len() >= 12 {
         u64::from_be_bytes([
-            payload[4], payload[5], payload[6], payload[7],
-            payload[8], payload[9], payload[10], payload[11],
+            payload[4],
+            payload[5],
+            payload[6],
+            payload[7],
+            payload[8],
+            payload[9],
+            payload[10],
+            payload[11],
         ])
     } else {
         0
     };
-    AmqpKind::Header { channel, class, body_size }
+    AmqpKind::Header {
+        channel,
+        class,
+        body_size,
+    }
 }
 
 fn decode_method_args(
@@ -274,7 +312,9 @@ fn read_shortstr(buf: &[u8], off: usize) -> (Option<String>, usize) {
     if buf.len() < start + n {
         return (None, off);
     }
-    let s = std::str::from_utf8(&buf[start..start + n]).ok().map(|s| s.to_string());
+    let s = std::str::from_utf8(&buf[start..start + n])
+        .ok()
+        .map(|s| s.to_string());
     (s, start + n)
 }
 
@@ -363,7 +403,11 @@ mod tests {
             AmqpParserOutput::Record { record, consumed } => {
                 assert_eq!(consumed, 8);
                 match record.kind {
-                    AmqpKind::ProtocolHeader { major, minor, revision } => {
+                    AmqpKind::ProtocolHeader {
+                        major,
+                        minor,
+                        revision,
+                    } => {
                         assert_eq!((major, minor, revision), (0, 9, 1));
                     }
                     _ => panic!(),
@@ -381,10 +425,10 @@ mod tests {
         payload.extend_from_slice(&40u16.to_be_bytes()); // method publish
         payload.extend_from_slice(&0u16.to_be_bytes()); // reserved
         payload.push(5);
-        payload.extend_from_slice(b"logs1");            // exchange
+        payload.extend_from_slice(b"logs1"); // exchange
         payload.push(7);
-        payload.extend_from_slice(b"info.ok");          // routing-key
-        payload.push(0);                                // bits
+        payload.extend_from_slice(b"info.ok"); // routing-key
+        payload.push(0); // bits
 
         let mut frame = Vec::new();
         frame.push(1);

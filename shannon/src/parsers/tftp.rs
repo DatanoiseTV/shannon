@@ -44,28 +44,65 @@ pub struct TftpRecord {
 
 #[derive(Debug, Clone)]
 pub enum TftpKind {
-    Read { filename: String, mode: String, options: Vec<(String, String)> },
-    Write { filename: String, mode: String, options: Vec<(String, String)> },
-    Data { block: u16, bytes: usize },
-    Ack { block: u16 },
-    Error { code: u16, code_name: &'static str, message: String },
-    Oack { options: Vec<(String, String)> },
+    Read {
+        filename: String,
+        mode: String,
+        options: Vec<(String, String)>,
+    },
+    Write {
+        filename: String,
+        mode: String,
+        options: Vec<(String, String)>,
+    },
+    Data {
+        block: u16,
+        bytes: usize,
+    },
+    Ack {
+        block: u16,
+    },
+    Error {
+        code: u16,
+        code_name: &'static str,
+        message: String,
+    },
+    Oack {
+        options: Vec<(String, String)>,
+    },
 }
 
 impl TftpRecord {
     pub fn display_line(&self) -> String {
         match &self.kind {
-            TftpKind::Read { filename, mode, options } => {
-                format!("tftp RRQ file={filename:?} mode={mode}{}", fmt_opts(options))
+            TftpKind::Read {
+                filename,
+                mode,
+                options,
+            } => {
+                format!(
+                    "tftp RRQ file={filename:?} mode={mode}{}",
+                    fmt_opts(options)
+                )
             }
-            TftpKind::Write { filename, mode, options } => {
-                format!("tftp WRQ file={filename:?} mode={mode}{}", fmt_opts(options))
+            TftpKind::Write {
+                filename,
+                mode,
+                options,
+            } => {
+                format!(
+                    "tftp WRQ file={filename:?} mode={mode}{}",
+                    fmt_opts(options)
+                )
             }
             TftpKind::Data { block, bytes } => {
                 format!("tftp DATA block={block} bytes={bytes}")
             }
             TftpKind::Ack { block } => format!("tftp ACK block={block}"),
-            TftpKind::Error { code, code_name, message } => {
+            TftpKind::Error {
+                code,
+                code_name,
+                message,
+            } => {
                 format!("tftp ERROR {code} ({code_name}) {message:?}")
             }
             TftpKind::Oack { options } => format!("tftp OACK{}", fmt_opts(options)),
@@ -111,9 +148,17 @@ impl TftpParser {
                 };
                 let options = collect_kv(&mut parts);
                 if op == 1 {
-                    TftpKind::Read { filename, mode, options }
+                    TftpKind::Read {
+                        filename,
+                        mode,
+                        options,
+                    }
                 } else {
-                    TftpKind::Write { filename, mode, options }
+                    TftpKind::Write {
+                        filename,
+                        mode,
+                        options,
+                    }
                 }
             }
             3 => {
@@ -122,7 +167,10 @@ impl TftpParser {
                     return TftpParserOutput::Skip(buf.len());
                 }
                 let block = u16::from_be_bytes([body[0], body[1]]);
-                TftpKind::Data { block, bytes: body.len() - 2 }
+                TftpKind::Data {
+                    block,
+                    bytes: body.len() - 2,
+                }
             }
             4 => {
                 if body.len() < 2 {
@@ -142,7 +190,11 @@ impl TftpParser {
                     .unwrap_or("")
                     .trim_end_matches('\0')
                     .to_string();
-                TftpKind::Error { code, code_name: error_name(code), message }
+                TftpKind::Error {
+                    code,
+                    code_name: error_name(code),
+                    message,
+                }
             }
             6 => {
                 let mut it = split_nul(body);
@@ -155,7 +207,10 @@ impl TftpParser {
             }
         };
         TftpParserOutput::Record {
-            record: TftpRecord { direction: dir, kind },
+            record: TftpRecord {
+                direction: dir,
+                kind,
+            },
             consumed: buf.len(),
         }
     }
@@ -168,7 +223,11 @@ fn split_nul(mut buf: &[u8]) -> impl Iterator<Item = &str> {
         }
         let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
         let s = std::str::from_utf8(&buf[..end]).ok();
-        buf = if end < buf.len() { &buf[end + 1..] } else { &[][..] };
+        buf = if end < buf.len() {
+            &buf[end + 1..]
+        } else {
+            &[][..]
+        };
         s
     })
 }
@@ -221,7 +280,11 @@ mod tests {
         let mut p = TftpParser::default();
         match p.parse(&buf, Direction::Tx) {
             TftpParserOutput::Record { record, .. } => match record.kind {
-                TftpKind::Read { filename, mode, options } => {
+                TftpKind::Read {
+                    filename,
+                    mode,
+                    options,
+                } => {
                     assert_eq!(filename, "pxelinux.0");
                     assert_eq!(mode, "octet");
                     assert_eq!(options.len(), 2);
@@ -243,7 +306,11 @@ mod tests {
         let mut p = TftpParser::default();
         match p.parse(&buf, Direction::Rx) {
             TftpParserOutput::Record { record, .. } => match record.kind {
-                TftpKind::Error { code, code_name, message } => {
+                TftpKind::Error {
+                    code,
+                    code_name,
+                    message,
+                } => {
                     assert_eq!(code, 1);
                     assert_eq!(code_name, "file-not-found");
                     assert_eq!(message, "not found");
@@ -258,6 +325,9 @@ mod tests {
     fn unknown_op_bypasses() {
         let mut p = TftpParser::default();
         let buf = [0x00u8, 0x10]; // opcode 16 unknown
-        assert!(matches!(p.parse(&buf, Direction::Tx), TftpParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&buf, Direction::Tx),
+            TftpParserOutput::Skip(_)
+        ));
     }
 }

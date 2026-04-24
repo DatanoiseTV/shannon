@@ -39,19 +39,35 @@ pub struct FtpRecord {
 
 #[derive(Debug, Clone)]
 pub enum FtpKind {
-    Command { verb: String, arg: Option<String>, redacted: bool },
-    Reply { code: u16, text: String, continuation: bool },
+    Command {
+        verb: String,
+        arg: Option<String>,
+        redacted: bool,
+    },
+    Reply {
+        code: u16,
+        text: String,
+        continuation: bool,
+    },
 }
 
 impl FtpRecord {
     pub fn display_line(&self) -> String {
         match &self.kind {
-            FtpKind::Command { verb, arg, redacted } => match (arg, redacted) {
+            FtpKind::Command {
+                verb,
+                arg,
+                redacted,
+            } => match (arg, redacted) {
                 (_, true) => format!("ftp C {verb} <redacted>"),
                 (Some(a), _) => format!("ftp C {verb} {a}"),
                 (None, _) => format!("ftp C {verb}"),
             },
-            FtpKind::Reply { code, text, continuation } => {
+            FtpKind::Reply {
+                code,
+                text,
+                continuation,
+            } => {
                 let sep = if *continuation { "-" } else { " " };
                 format!("ftp S {code}{sep}{text}")
             }
@@ -99,7 +115,10 @@ impl FtpParser {
         };
         match kind {
             Some(k) => FtpParserOutput::Record {
-                record: FtpRecord { direction: dir, kind: k },
+                record: FtpRecord {
+                    direction: dir,
+                    kind: k,
+                },
                 consumed: end,
             },
             None => {
@@ -116,9 +135,16 @@ fn parse_command(line: &str) -> Option<FtpKind> {
     if !is_known_verb(&verb) {
         return None;
     }
-    let arg = parts.next().map(|s| s.to_string()).filter(|s| !s.is_empty());
+    let arg = parts
+        .next()
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty());
     let redacted = verb == "PASS" || verb == "ACCT";
-    Some(FtpKind::Command { verb, arg, redacted })
+    Some(FtpKind::Command {
+        verb,
+        arg,
+        redacted,
+    })
 }
 
 fn is_known_verb(v: &str) -> bool {
@@ -194,7 +220,11 @@ fn parse_reply(line: &str) -> Option<FtpKind> {
     }
     let code: u16 = line[..3].parse().ok()?;
     let text = line.get(4..).unwrap_or("").to_string();
-    Some(FtpKind::Reply { code, text, continuation: sep == b'-' })
+    Some(FtpKind::Reply {
+        code,
+        text,
+        continuation: sep == b'-',
+    })
 }
 
 #[cfg(test)]
@@ -210,7 +240,11 @@ mod tests {
         match p.parse(&buf[off..], Direction::Tx) {
             FtpParserOutput::Record { record, consumed } => {
                 match record.kind {
-                    FtpKind::Command { verb, arg, redacted } => {
+                    FtpKind::Command {
+                        verb,
+                        arg,
+                        redacted,
+                    } => {
                         assert_eq!(verb, "USER");
                         assert_eq!(arg.as_deref(), Some("alice"));
                         assert!(!redacted);
@@ -223,7 +257,10 @@ mod tests {
         }
         // PASS hunter2 — redacted
         match p.parse(&buf[off..], Direction::Tx) {
-            FtpParserOutput::Record { record, consumed: _ } => match record.kind {
+            FtpParserOutput::Record {
+                record,
+                consumed: _,
+            } => match record.kind {
                 FtpKind::Command { verb, redacted, .. } => {
                     assert_eq!(verb, "PASS");
                     assert!(redacted);
@@ -244,7 +281,11 @@ mod tests {
             FtpParserOutput::Record { record, consumed } => {
                 assert_eq!(consumed, buf.len());
                 match record.kind {
-                    FtpKind::Reply { code, text, continuation } => {
+                    FtpKind::Reply {
+                        code,
+                        text,
+                        continuation,
+                    } => {
                         assert_eq!(code, 220);
                         assert!(text.contains("vsFTPd"));
                         assert!(!continuation);
@@ -262,7 +303,9 @@ mod tests {
         let buf = b"211-Features:\r\n";
         match p.parse(buf, Direction::Rx) {
             FtpParserOutput::Record { record, .. } => match record.kind {
-                FtpKind::Reply { code, continuation, .. } => {
+                FtpKind::Reply {
+                    code, continuation, ..
+                } => {
                     assert_eq!(code, 211);
                     assert!(continuation);
                 }
@@ -275,7 +318,10 @@ mod tests {
     #[test]
     fn partial_line_needs_more() {
         let mut p = FtpParser::default();
-        assert!(matches!(p.parse(b"USER al", Direction::Tx), FtpParserOutput::Need));
+        assert!(matches!(
+            p.parse(b"USER al", Direction::Tx),
+            FtpParserOutput::Need
+        ));
     }
 
     #[test]

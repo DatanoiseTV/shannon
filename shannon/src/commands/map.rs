@@ -30,12 +30,12 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
-    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction as LayoutDirection, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
+    Terminal,
 };
 use tokio::signal;
 
@@ -46,7 +46,9 @@ use crate::flow::{AnyRecord, FlowKey, FlowTable};
 use crate::runtime::{FilterSetup, Runtime};
 
 pub fn run(_cli: &Cli, args: MapArgs) -> Result<()> {
-    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     rt.block_on(async move { run_async(args).await })
 }
 
@@ -109,7 +111,10 @@ fn absorb(map: &mut ServiceMap, flows: &mut FlowTable, dns: &DnsCache, ev: &Deco
             map.connect_hint(ctx.tgid, ctx.comm.clone(), c.dst.0, c.dst.1, dns);
         }
         DecodedEvent::TcpData(ctx, d) => {
-            let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
+            let key = FlowKey::Tcp {
+                pid: ctx.tgid,
+                sock_id: d.sock_id,
+            };
             flows.hint_port(key.clone(), d.dst.1);
             let edge_key = EdgeKey {
                 pid: ctx.tgid,
@@ -117,9 +122,24 @@ fn absorb(map: &mut ServiceMap, flows: &mut FlowTable, dns: &DnsCache, ev: &Deco
                 peer_port: d.dst.1,
             };
             let comm = ctx.comm.clone();
-            let bytes_tx = if matches!(d.direction, Direction::Tx) { d.total_bytes as u64 } else { 0 };
-            let bytes_rx = if matches!(d.direction, Direction::Rx) { d.total_bytes as u64 } else { 0 };
-            map.touch(edge_key.clone(), comm.clone(), None, bytes_tx, bytes_rx, dns);
+            let bytes_tx = if matches!(d.direction, Direction::Tx) {
+                d.total_bytes as u64
+            } else {
+                0
+            };
+            let bytes_rx = if matches!(d.direction, Direction::Rx) {
+                d.total_bytes as u64
+            } else {
+                0
+            };
+            map.touch(
+                edge_key.clone(),
+                comm.clone(),
+                None,
+                bytes_tx,
+                bytes_rx,
+                dns,
+            );
             for r in flows.feed(key, d.direction, &d.data) {
                 let (proto, label) = classify(&r);
                 map.record(edge_key.clone(), comm.clone(), proto, label);
@@ -145,7 +165,11 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
     match r {
         AnyRecord::Http1(h) => {
             let host = h.headers.iter().find_map(|(k, v)| {
-                if k.eq_ignore_ascii_case("host") { Some(v.clone()) } else { None }
+                if k.eq_ignore_ascii_case("host") {
+                    Some(v.clone())
+                } else {
+                    None
+                }
             });
             ("http", host)
         }
@@ -185,7 +209,10 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::Amqp(_) => ("amqp", None),
         AnyRecord::Kerberos(k) => ("krb5", k.realm.clone()),
         AnyRecord::Oracle(o) => ("oracle", o.service_name.clone().or_else(|| o.sid.clone())),
-        AnyRecord::Mssql(m) => ("mssql", m.database.clone().or_else(|| m.server_name.clone())),
+        AnyRecord::Mssql(m) => (
+            "mssql",
+            m.database.clone().or_else(|| m.server_name.clone()),
+        ),
         AnyRecord::Dhcp(d) => ("dhcp", d.hostname.clone()),
         AnyRecord::Tftp(_) => ("tftp", None),
         AnyRecord::Tacacs(_) => ("tacacs+", None),
@@ -194,19 +221,19 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::WireGuard(_) => ("wg", None),
         AnyRecord::Irc(_) => ("irc", None),
         AnyRecord::Nfs(_) => ("nfs", None),
-        AnyRecord::Rtsp(r) => ("rtsp", match &r.kind {
-            crate::parsers::rtsp::RtspKind::Request { uri, .. } => Some(uri.clone()),
-            _ => None,
-        }),
+        AnyRecord::Rtsp(r) => (
+            "rtsp",
+            match &r.kind {
+                crate::parsers::rtsp::RtspKind::Request { uri, .. } => Some(uri.clone()),
+                _ => None,
+            },
+        ),
         AnyRecord::Smpp(s) => ("smpp", s.system_id.clone()),
         AnyRecord::Dns(d) => (
             if d.multicast { "mdns" } else { "dns" },
             d.questions.first().map(|q| q.name.clone()),
         ),
-        AnyRecord::Quic(q) => (
-            "quic",
-            q.tls.as_ref().and_then(|t| t.sni.clone()),
-        ),
+        AnyRecord::Quic(q) => ("quic", q.tls.as_ref().and_then(|t| t.sni.clone())),
     }
 }
 
@@ -234,15 +261,12 @@ struct Edge {
 }
 
 impl ServiceMap {
-    fn connect_hint(
-        &mut self,
-        pid: u32,
-        comm: String,
-        addr: IpAddr,
-        port: u16,
-        dns: &DnsCache,
-    ) {
-        let key = EdgeKey { pid, peer_addr: addr, peer_port: port };
+    fn connect_hint(&mut self, pid: u32, comm: String, addr: IpAddr, port: u16, dns: &DnsCache) {
+        let key = EdgeKey {
+            pid,
+            peer_addr: addr,
+            peer_port: port,
+        };
         let now = Instant::now();
         let e = self.edges.entry(key).or_insert_with(|| Edge {
             comm: comm.clone(),
@@ -287,13 +311,7 @@ impl ServiceMap {
         e.last_seen = now;
     }
 
-    fn record(
-        &mut self,
-        key: EdgeKey,
-        comm: String,
-        proto: &'static str,
-        label: Option<String>,
-    ) {
+    fn record(&mut self, key: EdgeKey, comm: String, proto: &'static str, label: Option<String>) {
         let now = Instant::now();
         let e = self.edges.entry(key).or_insert_with(|| Edge {
             comm: comm.clone(),
@@ -321,12 +339,7 @@ impl ServiceMap {
     }
 }
 
-fn render(
-    out: &mut impl Write,
-    map: &ServiceMap,
-    args: &MapArgs,
-    tty: bool,
-) -> io::Result<()> {
+fn render(out: &mut impl Write, map: &ServiceMap, args: &MapArgs, tty: bool) -> io::Result<()> {
     match args.format {
         MapFormat::Table => render_table(out, map, args.depth, tty),
         MapFormat::Json => render_json(out, map),
@@ -337,20 +350,11 @@ fn render(
     }
 }
 
-fn render_table(
-    out: &mut impl Write,
-    map: &ServiceMap,
-    depth: u32,
-    tty: bool,
-) -> io::Result<()> {
+fn render_table(out: &mut impl Write, map: &ServiceMap, depth: u32, tty: bool) -> io::Result<()> {
     if tty {
         write!(out, "\x1b[2J\x1b[H")?;
     }
-    writeln!(
-        out,
-        "shannon map   edges={}",
-        map.edges.len(),
-    )?;
+    writeln!(out, "shannon map   edges={}", map.edges.len(),)?;
     writeln!(
         out,
         "{:>7} {:<16} {:<8} {:<38} {:>6} {:>10} {:>10} {:>8}",
@@ -425,7 +429,11 @@ fn render_dot(out: &mut impl Write, map: &ServiceMap) -> io::Result<()> {
         writeln!(out, "  \"p{pid}\" [label=\"{comm}\\npid {pid}\"];")?;
     }
     for peer in &peers {
-        writeln!(out, "  \"q_{}\" [label=\"{peer}\", style=dashed];", hash32(peer))?;
+        writeln!(
+            out,
+            "  \"q_{}\" [label=\"{peer}\", style=dashed];",
+            hash32(peer)
+        )?;
     }
     for (key, edge) in &map.edges {
         let peer = match &edge.peer_label {
@@ -646,7 +654,12 @@ impl TuiState {
     fn new(depth: usize) -> Self {
         let mut st = TableState::default();
         st.select(Some(0));
-        Self { table_state: st, sort: TuiSort::LastSeen, desc: true, depth }
+        Self {
+            table_state: st,
+            sort: TuiSort::LastSeen,
+            desc: true,
+            depth,
+        }
     }
 }
 
@@ -681,11 +694,7 @@ impl TuiSort {
     }
 }
 
-fn draw_tui(
-    f: &mut ratatui::Frame<'_>,
-    map: &ServiceMap,
-    ui: &TuiState,
-) {
+fn draw_tui(f: &mut ratatui::Frame<'_>, map: &ServiceMap, ui: &TuiState) {
     let area = f.area();
     let chunks = Layout::default()
         .direction(LayoutDirection::Vertical)
@@ -794,9 +803,9 @@ fn sort_rows(rows: &mut Vec<(&EdgeKey, &Edge)>, sort: TuiSort, desc: bool) {
     match sort {
         TuiSort::LastSeen => rows.sort_by(|a, b| b.1.last_seen.cmp(&a.1.last_seen)),
         TuiSort::Calls => rows.sort_by(|a, b| b.1.calls.cmp(&a.1.calls)),
-        TuiSort::Bytes => rows.sort_by(|a, b| {
-            (b.1.tx_bytes + b.1.rx_bytes).cmp(&(a.1.tx_bytes + a.1.rx_bytes))
-        }),
+        TuiSort::Bytes => {
+            rows.sort_by(|a, b| (b.1.tx_bytes + b.1.rx_bytes).cmp(&(a.1.tx_bytes + a.1.rx_bytes)))
+        }
         TuiSort::Proto => rows.sort_by(|a, b| a.1.protocol.cmp(b.1.protocol)),
         TuiSort::Peer => rows.sort_by(|a, b| {
             a.1.peer_label
@@ -815,11 +824,15 @@ fn proto_colour(p: &str) -> Style {
         "http" | "h2" => Color::Green,
         "tls" => Color::Magenta,
         "dns" | "mdns" => Color::Cyan,
-        "pg" | "mysql" | "mongo" | "redis" | "oracle" | "mssql" | "cql" | "memcached" => Color::Yellow,
+        "pg" | "mysql" | "mongo" | "redis" | "oracle" | "mssql" | "cql" | "memcached" => {
+            Color::Yellow
+        }
         "kafka" | "nats" | "mqtt" | "amqp" | "stun" | "sip" | "rtsp" | "smpp" => Color::Blue,
         "ssh" | "ftp" | "rdp" | "socks" | "telnet" | "irc" => Color::Red,
         "modbus" | "s7" | "enip" | "dnp3" | "iec104" | "opcua" | "bacnet" => Color::LightYellow,
-        "ntp" | "radius" | "tacacs+" | "snmp" | "dhcp" | "tftp" | "syslog" | "krb5" | "ldap" => Color::LightBlue,
+        "ntp" | "radius" | "tacacs+" | "snmp" | "dhcp" | "tftp" | "syslog" | "krb5" | "ldap" => {
+            Color::LightBlue
+        }
         "smb" | "nfs" | "wg" => Color::LightMagenta,
         _ => Color::White,
     };

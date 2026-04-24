@@ -23,14 +23,14 @@ mod file_dump;
 mod flow;
 mod graphql;
 mod llm;
-mod ntlm;
-mod replay;
 mod llm_client;
 mod logging;
+mod ntlm;
 mod parsers;
 mod pcap;
 mod proto;
 mod proto_infer;
+mod replay;
 mod runtime;
 mod secrets;
 mod warnings;
@@ -66,14 +66,19 @@ fn main() -> ExitCode {
                 eprintln!("  caused by ({i}): {cause}");
             }
             tracing::debug!(error = ?err, "error detail");
-            let code = err.downcast_ref::<AppError>().map_or(1u8, AppError::exit_code);
+            let code = err
+                .downcast_ref::<AppError>()
+                .map_or(1u8, AppError::exit_code);
             ExitCode::from(code)
         }
     }
 }
 
 fn run(cli: Cli) -> anyhow::Result<()> {
-    let command = cli.command.clone().unwrap_or(Command::Watch(cli::WatchArgs::default()));
+    let command = cli
+        .command
+        .clone()
+        .unwrap_or(Command::Watch(cli::WatchArgs::default()));
     match command {
         Command::Watch(args) => commands::watch::run(&cli, args),
         Command::Trace(args) => commands::trace::run(&cli, args),
@@ -87,7 +92,10 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Completions(args) => cli::print_completions(args.shell),
         Command::Version => {
             println!("shannon {}", env!("CARGO_PKG_VERSION"));
-            println!("commit {}", option_env!("SHANNON_GIT_SHA").unwrap_or("unknown"));
+            println!(
+                "commit {}",
+                option_env!("SHANNON_GIT_SHA").unwrap_or("unknown")
+            );
             println!("abi-version {}", shannon_common::ABI_VERSION);
             Ok(())
         }

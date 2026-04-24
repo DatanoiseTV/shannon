@@ -119,16 +119,7 @@ impl EnipParser {
 const fn is_known_command(cmd: u16) -> bool {
     matches!(
         cmd,
-        0x0000
-            | 0x0004
-            | 0x0063
-            | 0x0064
-            | 0x0065
-            | 0x0066
-            | 0x006f
-            | 0x0070
-            | 0x0072
-            | 0x0073
+        0x0000 | 0x0004 | 0x0063 | 0x0064 | 0x0065 | 0x0066 | 0x006f | 0x0070 | 0x0072 | 0x0073
     )
 }
 
@@ -206,6 +197,9 @@ mod tests {
     #[test]
     fn short_buffer_needs_more() {
         let mut p = EnipParser::default();
-        assert!(matches!(p.parse(&[0u8; 12], Direction::Tx), EnipParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 12], Direction::Tx),
+            EnipParserOutput::Need
+        ));
     }
 }

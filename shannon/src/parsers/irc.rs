@@ -107,7 +107,10 @@ impl IrcParser {
                 return IrcParserOutput::Skip(buf.len());
             }
         };
-        IrcParserOutput::Record { record: rec, consumed: end }
+        IrcParserOutput::Record {
+            record: rec,
+            consumed: end,
+        }
     }
 }
 
@@ -283,6 +286,9 @@ mod tests {
     #[test]
     fn partial_line_needs_more() {
         let mut p = IrcParser::default();
-        assert!(matches!(p.parse(b"PRIVMSG #c", Direction::Tx), IrcParserOutput::Need));
+        assert!(matches!(
+            p.parse(b"PRIVMSG #c", Direction::Tx),
+            IrcParserOutput::Need
+        ));
     }
 }

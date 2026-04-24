@@ -29,13 +29,19 @@ pub struct KerberosParser {
 
 impl Default for KerberosParser {
     fn default() -> Self {
-        Self { bypass: false, tcp_framed: None }
+        Self {
+            bypass: false,
+            tcp_framed: None,
+        }
     }
 }
 
 pub enum KerberosParserOutput {
     Need,
-    Record { record: KerberosRecord, consumed: usize },
+    Record {
+        record: KerberosRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -139,12 +145,18 @@ impl KerberosParser {
             sname: find_sname(body),
             error_code: None,
         };
-        KerberosParserOutput::Record { record: rec, consumed: total }
+        KerberosParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
 const fn is_kerberos_tag(b: u8) -> bool {
-    matches!(b, 0x6A | 0x6B | 0x6C | 0x6D | 0x6E | 0x6F | 0x74 | 0x75 | 0x76 | 0x7E)
+    matches!(
+        b,
+        0x6A | 0x6B | 0x6C | 0x6D | 0x6E | 0x6F | 0x74 | 0x75 | 0x76 | 0x7E
+    )
 }
 
 const fn msg_name(tag: u8) -> &'static str {

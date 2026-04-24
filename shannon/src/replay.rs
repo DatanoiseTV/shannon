@@ -17,7 +17,7 @@ use std::io::{BufRead, BufReader};
 use std::net::IpAddr;
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 use crate::events::{

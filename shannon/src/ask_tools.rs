@@ -26,7 +26,10 @@ pub struct AskState {
 
 impl AskState {
     pub fn new(catalog: ApiCatalog, events_path: Option<PathBuf>) -> Self {
-        Self { catalog, events_path }
+        Self {
+            catalog,
+            events_path,
+        }
     }
 
     pub fn available_tools() -> Vec<ToolSpec> {
@@ -195,8 +198,7 @@ fn catalog_stats(state: &AskState) -> Result<String> {
             *hosts.entry(h.clone()).or_default() += e.call_count;
         }
     }
-    let mut p99_vec: Vec<f64> =
-        snap.iter().filter_map(|e| e.latency_ms_p99).collect();
+    let mut p99_vec: Vec<f64> = snap.iter().filter_map(|e| e.latency_ms_p99).collect();
     p99_vec.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let result = json!({
         "endpoints": snap.len(),
@@ -213,7 +215,11 @@ fn top_n(map: &HashMap<String, u64>, n: usize) -> Value {
     let mut v: Vec<(&String, &u64)> = map.iter().collect();
     v.sort_by(|a, b| b.1.cmp(a.1));
     v.truncate(n);
-    Value::Array(v.iter().map(|(k, c)| json!({"host": k, "calls": c})).collect())
+    Value::Array(
+        v.iter()
+            .map(|(k, c)| json!({"host": k, "calls": c}))
+            .collect(),
+    )
 }
 
 fn search_events(state: &AskState, args: &Value) -> Result<String> {

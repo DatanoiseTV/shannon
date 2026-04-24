@@ -149,7 +149,10 @@ impl SmbParser {
             share_path,
             file_name,
         };
-        SmbParserOutput::Record { record: rec, consumed: total }
+        SmbParserOutput::Record {
+            record: rec,
+            consumed: total,
+        }
     }
 }
 
@@ -274,8 +277,8 @@ mod tests {
         buf.extend_from_slice(&0u32.to_le_bytes()); // process_id
         buf.extend_from_slice(&0u32.to_le_bytes()); // tree_id
         buf.extend_from_slice(&0u64.to_le_bytes()); // session_id
-        buf.extend_from_slice(&[0u8; 16]);          // signature
-        buf.extend_from_slice(&[0u8; 36]);          // negotiate body
+        buf.extend_from_slice(&[0u8; 16]); // signature
+        buf.extend_from_slice(&[0u8; 36]); // negotiate body
         let mut p = SmbParser::default();
         match p.parse(&buf, Direction::Tx) {
             SmbParserOutput::Record { record, consumed } => {
@@ -292,12 +295,18 @@ mod tests {
     fn non_smb_bypasses() {
         let mut p = SmbParser::default();
         let buf = [0x01, 0, 0, 0, 0]; // nbt_type=1 (session msg), not 0
-        assert!(matches!(p.parse(&buf, Direction::Tx), SmbParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&buf, Direction::Tx),
+            SmbParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn short_needs_more() {
         let mut p = SmbParser::default();
-        assert!(matches!(p.parse(&[0u8; 3], Direction::Tx), SmbParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 3], Direction::Tx),
+            SmbParserOutput::Need
+        ));
     }
 }

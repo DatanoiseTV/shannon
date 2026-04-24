@@ -70,21 +70,21 @@ impl ContainerResolver {
     pub fn spawn_refresher(self: Arc<Self>, interval: Duration) {
         std::thread::Builder::new()
             .name("shannon-cgroup-refresh".into())
-            .spawn(move || {
-                loop {
-                    std::thread::sleep(interval);
-                    if Arc::strong_count(&self) <= 1 {
-                        return;
-                    }
-                    self.refresh();
+            .spawn(move || loop {
+                std::thread::sleep(interval);
+                if Arc::strong_count(&self) <= 1 {
+                    return;
                 }
+                self.refresh();
             })
             .expect("spawn cgroup refresh thread");
     }
 }
 
 fn walk(base: &Path, dir: &Path, out: &mut HashMap<u64, ContainerInfo>) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         let Ok(meta) = entry.metadata() else { continue };
@@ -109,7 +109,10 @@ fn classify(base: &Path, path: &Path) -> Option<ContainerInfo> {
     // Docker: /docker/<64-hex>.
     if let Some(id) = first_segment_after(&s, "docker/") {
         if id.len() >= 12 && id.chars().all(|c| c.is_ascii_hexdigit()) {
-            return Some(ContainerInfo { runtime: "docker", name: id[..12].to_string() });
+            return Some(ContainerInfo {
+                runtime: "docker",
+                name: id[..12].to_string(),
+            });
         }
     }
 
@@ -119,7 +122,10 @@ fn classify(base: &Path, path: &Path) -> Option<ContainerInfo> {
         // Walk from leaf up: pick the deepest `.scope` or `.slice` as the container.
         if let Some(leaf) = path.file_name().and_then(|n| n.to_str()) {
             // cri-containerd-<hex>.scope  -> containerd <hex>[:12]
-            if let Some(hex) = leaf.strip_prefix("cri-containerd-").and_then(|s| s.strip_suffix(".scope")) {
+            if let Some(hex) = leaf
+                .strip_prefix("cri-containerd-")
+                .and_then(|s| s.strip_suffix(".scope"))
+            {
                 if hex.chars().all(|c| c.is_ascii_hexdigit()) {
                     return Some(ContainerInfo {
                         runtime: "containerd",
@@ -128,7 +134,10 @@ fn classify(base: &Path, path: &Path) -> Option<ContainerInfo> {
                 }
             }
             // crio-<hex>.scope
-            if let Some(hex) = leaf.strip_prefix("crio-").and_then(|s| s.strip_suffix(".scope")) {
+            if let Some(hex) = leaf
+                .strip_prefix("crio-")
+                .and_then(|s| s.strip_suffix(".scope"))
+            {
                 if hex.chars().all(|c| c.is_ascii_hexdigit()) {
                     return Some(ContainerInfo {
                         runtime: "cri-o",
@@ -137,7 +146,10 @@ fn classify(base: &Path, path: &Path) -> Option<ContainerInfo> {
                 }
             }
             // docker-<hex>.scope
-            if let Some(hex) = leaf.strip_prefix("docker-").and_then(|s| s.strip_suffix(".scope")) {
+            if let Some(hex) = leaf
+                .strip_prefix("docker-")
+                .and_then(|s| s.strip_suffix(".scope"))
+            {
                 if hex.chars().all(|c| c.is_ascii_hexdigit()) {
                     return Some(ContainerInfo {
                         runtime: "docker",
@@ -147,14 +159,20 @@ fn classify(base: &Path, path: &Path) -> Option<ContainerInfo> {
             }
             // kubepods-*-pod<uid>.slice — the pod itself (no container yet).
             if let Some(uid) = leaf.strip_prefix("kubepods-").and_then(kubepod_uid) {
-                return Some(ContainerInfo { runtime: "k8s", name: format!("pod:{uid}") });
+                return Some(ContainerInfo {
+                    runtime: "k8s",
+                    name: format!("pod:{uid}"),
+                });
             }
         }
     }
 
     // Podman: libpod-<hex>.scope
     if let Some(leaf) = path.file_name().and_then(|n| n.to_str()) {
-        if let Some(hex) = leaf.strip_prefix("libpod-").and_then(|s| s.strip_suffix(".scope")) {
+        if let Some(hex) = leaf
+            .strip_prefix("libpod-")
+            .and_then(|s| s.strip_suffix(".scope"))
+        {
             if hex.chars().all(|c| c.is_ascii_hexdigit()) {
                 return Some(ContainerInfo {
                     runtime: "podman",
@@ -166,7 +184,10 @@ fn classify(base: &Path, path: &Path) -> Option<ContainerInfo> {
         // to display even outside containers.
         if leaf.ends_with(".service") && leaf.len() > ".service".len() {
             let name = leaf.trim_end_matches(".service").to_string();
-            return Some(ContainerInfo { runtime: "systemd", name });
+            return Some(ContainerInfo {
+                runtime: "systemd",
+                name,
+            });
         }
     }
 
@@ -184,7 +205,10 @@ fn kubepod_uid(s: &str) -> Option<String> {
     // Pattern: "<qos>-pod<uid>.slice"
     let (_qos, after) = s.split_once("-pod")?;
     let uid = after.trim_end_matches(".slice");
-    if uid.chars().all(|c| c.is_ascii_hexdigit() || c == '_' || c == '-') {
+    if uid
+        .chars()
+        .all(|c| c.is_ascii_hexdigit() || c == '_' || c == '-')
+    {
         Some(uid.to_string())
     } else {
         None
@@ -222,9 +246,7 @@ mod tests {
     #[test]
     fn classifies_docker() {
         let base = Path::new("/sys/fs/cgroup");
-        let p = base.join(
-            "docker/123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        );
+        let p = base.join("docker/123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
         let info = classify(base, &p).expect("docker match");
         assert_eq!(info.runtime, "docker");
         assert_eq!(info.name, "123456789abc");
@@ -233,9 +255,8 @@ mod tests {
     #[test]
     fn classifies_podman() {
         let base = Path::new("/sys/fs/cgroup");
-        let p = base.join(
-            "user.slice/user-1000.slice/libpod-abcdef1234567890abcdef1234567890.scope",
-        );
+        let p =
+            base.join("user.slice/user-1000.slice/libpod-abcdef1234567890abcdef1234567890.scope");
         let info = classify(base, &p).expect("podman match");
         assert_eq!(info.runtime, "podman");
     }

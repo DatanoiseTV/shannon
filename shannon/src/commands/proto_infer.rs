@@ -10,7 +10,9 @@ use crate::proto_infer;
 
 pub fn run(_cli: &Cli, args: ProtoInferArgs) -> Result<()> {
     let threads = if args.threads == 0 {
-        std::thread::available_parallelism().map(std::num::NonZeroUsize::get).unwrap_or(4)
+        std::thread::available_parallelism()
+            .map(std::num::NonZeroUsize::get)
+            .unwrap_or(4)
     } else {
         args.threads
     };

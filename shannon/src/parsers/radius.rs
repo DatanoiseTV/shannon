@@ -38,7 +38,10 @@ impl Default for RadiusParser {
 
 pub enum RadiusParserOutput {
     Need,
-    Record { record: RadiusRecord, consumed: usize },
+    Record {
+        record: RadiusRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -214,12 +217,18 @@ mod tests {
         let mut p = RadiusParser::default();
         let mut pkt = vec![0u8; HEADER];
         pkt[0] = 99; // unknown code
-        assert!(matches!(p.parse(&pkt, Direction::Tx), RadiusParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&pkt, Direction::Tx),
+            RadiusParserOutput::Skip(_)
+        ));
     }
 
     #[test]
     fn short_needs_more() {
         let mut p = RadiusParser::default();
-        assert!(matches!(p.parse(&[0u8; 10], Direction::Tx), RadiusParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 10], Direction::Tx),
+            RadiusParserOutput::Need
+        ));
     }
 }

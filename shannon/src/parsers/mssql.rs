@@ -40,7 +40,10 @@ impl Default for MssqlParser {
 
 pub enum MssqlParserOutput {
     Need,
-    Record { record: MssqlRecord, consumed: usize },
+    Record {
+        record: MssqlRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
@@ -83,7 +86,11 @@ impl MssqlRecord {
             .as_deref()
             .map(|s| format!(" db={s}"))
             .unwrap_or_default();
-        let pw = if self.password_present { " pw=<redacted>" } else { "" };
+        let pw = if self.password_present {
+            " pw=<redacted>"
+        } else {
+            ""
+        };
         format!(
             "mssql {} len={} spid={}{u}{s}{a}{db}{pw}",
             self.type_name, self.length, self.spid,
@@ -148,7 +155,9 @@ impl MssqlParser {
 /// string field lives inside the packet (offsets are relative to
 /// the start of the TDS packet, i.e. include the 8-byte header).
 /// Strings are UCS-2 little-endian.
-fn decode_login7(body: &[u8]) -> (
+fn decode_login7(
+    body: &[u8],
+) -> (
     Option<String>,
     Option<String>,
     Option<String>,
@@ -206,7 +215,10 @@ fn decode_login7(body: &[u8]) -> (
 }
 
 const fn is_known_type(t: u8) -> bool {
-    matches!(t, 0x01 | 0x02 | 0x03 | 0x04 | 0x06 | 0x07 | 0x0E | 0x0F | 0x10 | 0x11 | 0x12)
+    matches!(
+        t,
+        0x01 | 0x02 | 0x03 | 0x04 | 0x06 | 0x07 | 0x0E | 0x0F | 0x10 | 0x11 | 0x12
+    )
 }
 
 const fn type_name(t: u8) -> &'static str {
@@ -232,9 +244,7 @@ mod tests {
 
     #[test]
     fn prelogin_parsed() {
-        let buf = [
-            0x12, 0x01, 0x00, 0x09, 0x00, 0x00, 0x01, 0x00, 0xff,
-        ];
+        let buf = [0x12, 0x01, 0x00, 0x09, 0x00, 0x00, 0x01, 0x00, 0xff];
         let mut p = MssqlParser::default();
         match p.parse(&buf, Direction::Tx) {
             MssqlParserOutput::Record { record, consumed } => {
@@ -258,6 +268,9 @@ mod tests {
     #[test]
     fn short_needs_more() {
         let mut p = MssqlParser::default();
-        assert!(matches!(p.parse(&[0u8; 4], Direction::Tx), MssqlParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 4], Direction::Tx),
+            MssqlParserOutput::Need
+        ));
     }
 }

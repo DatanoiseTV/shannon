@@ -9,8 +9,8 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use anyhow::{bail, Context, Result};
 
 use shannon_common::{
-    ConnEndPayload, ConnStartPayload, DnsHeader, EventKind, HEADER_SIZE,
-    L4Protocol, SqliteHeader, TcpDataHeader, TlsDataHeader, TlsLib, validate,
+    validate, ConnEndPayload, ConnStartPayload, DnsHeader, EventKind, L4Protocol, SqliteHeader,
+    TcpDataHeader, TlsDataHeader, TlsLib, HEADER_SIZE,
 };
 
 /// A decoded event ready for consumption by the router / TUI / exporter.
@@ -115,7 +115,11 @@ pub enum Direction {
 
 impl From<u8> for Direction {
     fn from(v: u8) -> Self {
-        if v == 0 { Self::Tx } else { Self::Rx }
+        if v == 0 {
+            Self::Tx
+        } else {
+            Self::Rx
+        }
     }
 }
 
@@ -272,8 +276,12 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedEvent> {
 
 fn read_struct<T: Copy>(bytes: &[u8]) -> Result<T> {
     if bytes.len() < size_of::<T>() {
-        bail!("struct {} truncated: have {} need {}",
-              std::any::type_name::<T>(), bytes.len(), size_of::<T>());
+        bail!(
+            "struct {} truncated: have {} need {}",
+            std::any::type_name::<T>(),
+            bytes.len(),
+            size_of::<T>()
+        );
     }
     // SAFETY: caller ensures `bytes` holds a valid `T`; `T: Copy` implies
     // no `Drop`, and we align-copy to avoid aliasing rules.

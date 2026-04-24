@@ -32,14 +32,17 @@ impl Default for SyslogParser {
 
 pub enum SyslogParserOutput {
     Need,
-    Record { record: SyslogRecord, consumed: usize },
+    Record {
+        record: SyslogRecord,
+        consumed: usize,
+    },
     Skip(usize),
 }
 
 #[derive(Debug, Clone)]
 pub struct SyslogRecord {
     pub direction: Direction,
-    pub version: u8,            // 0 for legacy 3164, 1+ for 5424
+    pub version: u8, // 0 for legacy 3164, 1+ for 5424
     pub facility: u8,
     pub facility_name: &'static str,
     pub severity: u8,
@@ -94,12 +97,7 @@ impl SyslogParser {
         self.parse_line(buf, dir, buf.len())
     }
 
-    fn parse_line(
-        &mut self,
-        line: &[u8],
-        dir: Direction,
-        consumed: usize,
-    ) -> SyslogParserOutput {
+    fn parse_line(&mut self, line: &[u8], dir: Direction, consumed: usize) -> SyslogParserOutput {
         let s = match std::str::from_utf8(line) {
             Ok(s) => s,
             Err(_) => {
@@ -120,11 +118,12 @@ impl SyslogParser {
         let severity = pri & 7;
 
         // Decide 5424 vs 3164 by a leading "1 " (version).
-        let (version, ts, host, app, procid, msgid, msg) = if let Some(rest) = rest.strip_prefix("1 ") {
-            parse_5424(rest)
-        } else {
-            parse_3164(rest)
-        };
+        let (version, ts, host, app, procid, msgid, msg) =
+            if let Some(rest) = rest.strip_prefix("1 ") {
+                parse_5424(rest)
+            } else {
+                parse_3164(rest)
+            };
 
         let rec = SyslogRecord {
             direction: dir,
@@ -140,7 +139,10 @@ impl SyslogParser {
             msgid,
             message: msg,
         };
-        SyslogParserOutput::Record { record: rec, consumed }
+        SyslogParserOutput::Record {
+            record: rec,
+            consumed,
+        }
     }
 }
 
@@ -161,7 +163,17 @@ fn parse_pri(s: &str) -> Option<(u8, &str)> {
     Some((pri, &s[end + 1..]))
 }
 
-fn parse_5424(rest: &str) -> (u8, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, String) {
+fn parse_5424(
+    rest: &str,
+) -> (
+    u8,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    String,
+) {
     // TIMESTAMP SP HOSTNAME SP APP-NAME SP PROCID SP MSGID SP SD
     // SP MSG — any field may be "-".
     let mut it = rest.splitn(6, ' ');
@@ -207,7 +219,17 @@ fn skip_sd(s: &str) -> &str {
     s[i..].trim_start()
 }
 
-fn parse_3164(rest: &str) -> (u8, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, String) {
+fn parse_3164(
+    rest: &str,
+) -> (
+    u8,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    String,
+) {
     // "Mmm dd HH:MM:SS hostname tag[pid]: message" — best-effort.
     let ts_end = find_nth_space(rest, 3);
     let (ts, rest) = match ts_end {
@@ -324,7 +346,8 @@ mod tests {
 
     #[test]
     fn rfc3164_sample() {
-        let msg = b"<13>Oct 11 22:14:15 mymachine sudo[1234]: pam_unix(sudo:session): session opened\n";
+        let msg =
+            b"<13>Oct 11 22:14:15 mymachine sudo[1234]: pam_unix(sudo:session): session opened\n";
         let mut p = SyslogParser::default();
         match p.parse(msg, Direction::Rx) {
             SyslogParserOutput::Record { record, .. } => {

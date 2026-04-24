@@ -57,8 +57,7 @@ pub fn run(_cli: &Cli, args: AnalyzeArgs) -> Result<()> {
 }
 
 fn open_maybe_compressed(path: &Path) -> Result<Box<dyn Read + Send>> {
-    let mut f =
-        File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let mut f = File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let mut magic = [0u8; 4];
     use std::io::{Read as _, Seek as _, SeekFrom};
     let n = f.read(&mut magic)?;
@@ -238,7 +237,11 @@ struct TopPeer {
 fn render(r: &Report, total_lines: u64, parse_errors: u64) {
     let mut out = std::io::stdout().lock();
     use std::io::Write as _;
-    let _ = writeln!(out, "shannon analyze — {} lines ({} unparseable)", total_lines, parse_errors);
+    let _ = writeln!(
+        out,
+        "shannon analyze — {} lines ({} unparseable)",
+        total_lines, parse_errors
+    );
     let _ = writeln!(out, "duration: {:.1}s", (r.duration_ms as f64) / 1000.0);
     let _ = writeln!(
         out,
@@ -279,7 +282,11 @@ fn render(r: &Report, total_lines: u64, parse_errors: u64) {
 }
 
 fn truncate(s: &str, n: usize) -> &str {
-    if s.len() <= n { s } else { &s[..n] }
+    if s.len() <= n {
+        s
+    } else {
+        &s[..n]
+    }
 }
 
 fn humanise_bytes(n: u64) -> String {

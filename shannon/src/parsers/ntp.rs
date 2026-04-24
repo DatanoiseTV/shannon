@@ -61,21 +61,15 @@ pub struct NtpRecord {
 
 impl NtpRecord {
     pub fn display_line(&self) -> String {
-        let ref_s = self
-            .ref_id_ascii
-            .clone()
-            .unwrap_or_else(|| format!(
+        let ref_s = self.ref_id_ascii.clone().unwrap_or_else(|| {
+            format!(
                 "{}.{}.{}.{}",
                 self.ref_id[0], self.ref_id[1], self.ref_id[2], self.ref_id[3]
-            ));
+            )
+        });
         format!(
             "ntp v{} mode={} ({}) stratum={} ({}) poll=2^{}s ref={ref_s}",
-            self.version,
-            self.mode,
-            self.mode_name,
-            self.stratum,
-            self.stratum_name,
-            self.poll,
+            self.version, self.mode, self.mode_name, self.stratum, self.stratum_name, self.poll,
         )
     }
 }
@@ -183,7 +177,7 @@ mod tests {
     fn stratum1_refid_ascii() {
         let mut buf = vec![0u8; HEADER];
         buf[0] = 0x24; // v4 mode=server
-        buf[1] = 1;    // stratum 1
+        buf[1] = 1; // stratum 1
         buf[12..16].copy_from_slice(b"GPS\0");
         let mut p = NtpParser::default();
         match p.parse(&buf, Direction::Rx) {
@@ -198,13 +192,19 @@ mod tests {
     #[test]
     fn short_needs_more() {
         let mut p = NtpParser::default();
-        assert!(matches!(p.parse(&[0u8; 10], Direction::Tx), NtpParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 10], Direction::Tx),
+            NtpParserOutput::Need
+        ));
     }
 
     #[test]
     fn non_ntp_bypasses() {
         let mut p = NtpParser::default();
         let junk: [u8; 48] = [0xff; 48]; // version=7 invalid
-        assert!(matches!(p.parse(&junk, Direction::Tx), NtpParserOutput::Skip(_)));
+        assert!(matches!(
+            p.parse(&junk, Direction::Tx),
+            NtpParserOutput::Skip(_)
+        ));
     }
 }

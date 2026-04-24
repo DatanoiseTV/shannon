@@ -89,12 +89,32 @@ pub enum Rtype {
 pub enum RrData {
     A(std::net::Ipv4Addr),
     Aaaa(std::net::Ipv6Addr),
-    Name(String),                   // CNAME, NS, PTR
-    Mx { priority: u16, host: String },
+    Name(String), // CNAME, NS, PTR
+    Mx {
+        priority: u16,
+        host: String,
+    },
     Txt(Vec<String>),
-    Srv { priority: u16, weight: u16, port: u16, target: String },
-    Soa { mname: String, rname: String, serial: u32, refresh: u32, retry: u32, expire: u32, minimum: u32 },
-    Caa { flags: u8, tag: String, value: String },
+    Srv {
+        priority: u16,
+        weight: u16,
+        port: u16,
+        target: String,
+    },
+    Soa {
+        mname: String,
+        rname: String,
+        serial: u32,
+        refresh: u32,
+        retry: u32,
+        expire: u32,
+        minimum: u32,
+    },
+    Caa {
+        flags: u8,
+        tag: String,
+        value: String,
+    },
     Raw(Vec<u8>),
 }
 
@@ -109,7 +129,11 @@ impl DnsRecord {
                     rcode_name(self.rcode)
                 )
             } else {
-                let first_q = self.questions.first().map(|q| q.name.as_str()).unwrap_or("");
+                let first_q = self
+                    .questions
+                    .first()
+                    .map(|q| q.name.as_str())
+                    .unwrap_or("");
                 let first_a = self.answers.first().map(render_rrdata).unwrap_or_default();
                 format!(
                     "{proto} id={} rcode={}  {} -> {}",
@@ -169,8 +193,18 @@ fn render_rrdata(rr: &ResourceRecord) -> String {
         RrData::Name(n) => n.clone(),
         RrData::Mx { priority, host } => format!("{priority} {host}"),
         RrData::Txt(parts) => parts.join(" "),
-        RrData::Srv { priority, weight, port, target } => format!("{priority} {weight} {port} {target}"),
-        RrData::Soa { mname, rname, serial, .. } => format!("{mname} {rname} {serial}"),
+        RrData::Srv {
+            priority,
+            weight,
+            port,
+            target,
+        } => format!("{priority} {weight} {port} {target}"),
+        RrData::Soa {
+            mname,
+            rname,
+            serial,
+            ..
+        } => format!("{mname} {rname} {serial}"),
         RrData::Caa { flags, tag, value } => format!("{flags} {tag} \"{value}\""),
         RrData::Raw(b) => format!("<{} bytes>", b.len()),
     }
@@ -202,7 +236,10 @@ impl DnsParser {
             authorities: parsed.authorities,
             additionals: parsed.additionals,
         };
-        DnsParserOutput::Record { record: rec, consumed: buf.len() }
+        DnsParserOutput::Record {
+            record: rec,
+            consumed: buf.len(),
+        }
     }
 }
 
@@ -237,12 +274,23 @@ fn decode(buf: &[u8]) -> Option<Parsed> {
         let qtype = u16::from_be_bytes([buf[pos], buf[pos + 1]]);
         let qclass = u16::from_be_bytes([buf[pos + 2], buf[pos + 3]]);
         pos += 4;
-        questions.push(Question { name, qtype, qclass });
+        questions.push(Question {
+            name,
+            qtype,
+            qclass,
+        });
     }
     let answers = read_rrset(buf, &mut pos, an)?;
     let authorities = read_rrset(buf, &mut pos, ns)?;
     let additionals = read_rrset(buf, &mut pos, ar)?;
-    Some(Parsed { id, flags, questions, answers, authorities, additionals })
+    Some(Parsed {
+        id,
+        flags,
+        questions,
+        answers,
+        authorities,
+        additionals,
+    })
 }
 
 fn read_rrset(buf: &[u8], pos: &mut usize, n: usize) -> Option<Vec<ResourceRecord>> {
@@ -255,12 +303,7 @@ fn read_rrset(buf: &[u8], pos: &mut usize, n: usize) -> Option<Vec<ResourceRecor
         }
         let rtype_raw = u16::from_be_bytes([buf[*pos], buf[*pos + 1]]);
         let rclass = u16::from_be_bytes([buf[*pos + 2], buf[*pos + 3]]);
-        let ttl = u32::from_be_bytes([
-            buf[*pos + 4],
-            buf[*pos + 5],
-            buf[*pos + 6],
-            buf[*pos + 7],
-        ]);
+        let ttl = u32::from_be_bytes([buf[*pos + 4], buf[*pos + 5], buf[*pos + 6], buf[*pos + 7]]);
         let rdlen = u16::from_be_bytes([buf[*pos + 8], buf[*pos + 9]]) as usize;
         *pos += 10;
         if *pos + rdlen > buf.len() {
@@ -269,7 +312,13 @@ fn read_rrset(buf: &[u8], pos: &mut usize, n: usize) -> Option<Vec<ResourceRecor
         let rdata = &buf[*pos..*pos + rdlen];
         let (rtype, data) = decode_rdata(buf, rtype_raw, rdata)?;
         *pos += rdlen;
-        out.push(ResourceRecord { name, rtype, rclass, ttl, data });
+        out.push(ResourceRecord {
+            name,
+            rtype,
+            rclass,
+            ttl,
+            data,
+        });
     }
     Some(out)
 }
@@ -321,7 +370,15 @@ fn decode_rdata(msg: &[u8], rtype: u16, rd: &[u8]) -> Option<(Rtype, RrData)> {
             let weight = u16::from_be_bytes([rd[2], rd[3]]);
             let port = u16::from_be_bytes([rd[4], rd[5]]);
             let (target, _) = read_name_in(msg, rd, 6)?;
-            (Rtype::Srv, RrData::Srv { priority, weight, port, target })
+            (
+                Rtype::Srv,
+                RrData::Srv {
+                    priority,
+                    weight,
+                    port,
+                    target,
+                },
+            )
         }
         6 => {
             let (mname, off1) = read_name_in(msg, rd, 0)?;
@@ -350,8 +407,7 @@ fn decode_rdata(msg: &[u8], rtype: u16, rd: &[u8]) -> Option<(Rtype, RrData)> {
                 return None;
             }
             let tag = String::from_utf8_lossy(&rd[2..2 + tag_len]).into_owned();
-            let value =
-                String::from_utf8_lossy(&rd[2 + tag_len..]).into_owned();
+            let value = String::from_utf8_lossy(&rd[2 + tag_len..]).into_owned();
             (Rtype::Caa, RrData::Caa { flags, tag, value })
         }
         64 => (Rtype::Svcb, RrData::Raw(rd.to_vec())),
@@ -447,9 +503,7 @@ mod tests {
         0x01, 0x00, // flags: recursion desired
         0x00, 0x01, // qdcount
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // ancount/nscount/arcount
-        0x07, b'e', b'x', b'a', b'm', b'p', b'l', b'e',
-        0x03, b'c', b'o', b'm',
-        0x00, // root
+        0x07, b'e', b'x', b'a', b'm', b'p', b'l', b'e', 0x03, b'c', b'o', b'm', 0x00, // root
         0x00, 0x01, // qtype A
         0x00, 0x01, // qclass IN
     ];
@@ -476,13 +530,10 @@ mod tests {
         pkt[2] = 0x81;
         pkt[3] = 0x80; // response, recursion available
         pkt[7] = 0x01; // ancount = 1
-        // Answer: pointer to name at offset 12, type A, class IN, TTL, rdlen 4.
+                       // Answer: pointer to name at offset 12, type A, class IN, TTL, rdlen 4.
         pkt.extend_from_slice(&[
             0xc0, 0x0c, // ptr
-            0x00, 0x01, 0x00, 0x01,
-            0x00, 0x00, 0x0e, 0x10,
-            0x00, 0x04,
-            93, 184, 216, 34,
+            0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x0e, 0x10, 0x00, 0x04, 93, 184, 216, 34,
         ]);
         let mut p = DnsParser::default();
         match p.parse(&pkt, Direction::Rx) {
@@ -501,6 +552,9 @@ mod tests {
     #[test]
     fn short_buffer_needs_more() {
         let mut p = DnsParser::default();
-        assert!(matches!(p.parse(&[0u8; 8], Direction::Tx), DnsParserOutput::Need));
+        assert!(matches!(
+            p.parse(&[0u8; 8], Direction::Tx),
+            DnsParserOutput::Need
+        ));
     }
 }

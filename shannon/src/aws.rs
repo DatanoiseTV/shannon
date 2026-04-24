@@ -13,7 +13,7 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AwsService {
     S3,
-    S3Compatible,   // MinIO, R2, Backblaze, Wasabi, Spaces, Linode
+    S3Compatible, // MinIO, R2, Backblaze, Wasabi, Spaces, Linode
     DynamoDb,
     Sqs,
     Sns,
@@ -93,7 +93,15 @@ impl AwsCall {
                 let b = self.bucket.as_deref().unwrap_or("?");
                 let k = self.key.as_deref().unwrap_or("");
                 let op = self.operation.as_deref().unwrap_or("");
-                format!("{} {} {} s3://{}/{}  [{}]", self.service, op, self.region.as_deref().unwrap_or(""), b, k, auth)
+                format!(
+                    "{} {} {} s3://{}/{}  [{}]",
+                    self.service,
+                    op,
+                    self.region.as_deref().unwrap_or(""),
+                    b,
+                    k,
+                    auth
+                )
             }
             _ => format!(
                 "{} {}  [{}]  region={}",
@@ -147,7 +155,13 @@ pub fn classify(
         _ => {
             let op = if !x_amz_target.is_empty() {
                 // "Service.Operation" → keep the last segment.
-                Some(x_amz_target.rsplit(['.', '_']).next().unwrap_or(&x_amz_target).to_string())
+                Some(
+                    x_amz_target
+                        .rsplit(['.', '_'])
+                        .next()
+                        .unwrap_or(&x_amz_target)
+                        .to_string(),
+                )
             } else if method.eq_ignore_ascii_case("POST") {
                 Some("action".to_string())
             } else {
@@ -178,7 +192,10 @@ fn header(headers: &[(String, String)], name: &str) -> Option<String> {
 
 fn service_from_host(host: &str) -> Option<AwsService> {
     // Virtual-hosted S3: `<bucket>.s3.<region>.amazonaws.com` / `.s3.amazonaws.com`.
-    if host.ends_with(".s3.amazonaws.com") || host == "s3.amazonaws.com" || host.contains(".s3.") && host.ends_with(".amazonaws.com") {
+    if host.ends_with(".s3.amazonaws.com")
+        || host == "s3.amazonaws.com"
+        || host.contains(".s3.") && host.ends_with(".amazonaws.com")
+    {
         return Some(AwsService::S3);
     }
     // Path-style S3: `s3.amazonaws.com` / `s3-<region>.amazonaws.com`.
@@ -311,7 +328,11 @@ fn parse_sigv4(header: &str) -> (bool, Option<String>, Option<String>, String) {
 }
 
 fn truncate_str(s: &str, n: usize) -> String {
-    if s.len() <= n { s.to_string() } else { s[..n].to_string() }
+    if s.len() <= n {
+        s.to_string()
+    } else {
+        s[..n].to_string()
+    }
 }
 
 #[cfg(test)]
@@ -348,8 +369,8 @@ mod tests {
 
     #[test]
     fn s3_path_style_anonymous() {
-        let c = classify("GET", "/public/img.png", Some("s3.amazonaws.com"), &[])
-            .expect("classified");
+        let c =
+            classify("GET", "/public/img.png", Some("s3.amazonaws.com"), &[]).expect("classified");
         assert_eq!(c.bucket.as_deref(), Some("public"));
         assert_eq!(c.key.as_deref(), Some("img.png"));
         assert!(c.anonymous);
@@ -357,11 +378,14 @@ mod tests {
 
     #[test]
     fn dynamodb_json_rpc() {
-        let headers = vec![
-            ("X-Amz-Target".into(), "DynamoDB_20120810.GetItem".into()),
-        ];
-        let c = classify("POST", "/", Some("dynamodb.us-east-1.amazonaws.com"), &headers)
-            .expect("classified");
+        let headers = vec![("X-Amz-Target".into(), "DynamoDB_20120810.GetItem".into())];
+        let c = classify(
+            "POST",
+            "/",
+            Some("dynamodb.us-east-1.amazonaws.com"),
+            &headers,
+        )
+        .expect("classified");
         assert_eq!(c.service, AwsService::DynamoDb);
         assert_eq!(c.operation.as_deref(), Some("GetItem"));
     }

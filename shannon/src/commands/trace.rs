@@ -25,7 +25,9 @@ use crate::secrets;
 use crate::warnings;
 
 pub fn run(_cli: &Cli, args: TraceArgs) -> Result<()> {
-    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     rt.block_on(async move { run_async(args).await })
 }
 
@@ -96,9 +98,17 @@ async fn run_async(args: TraceArgs) -> Result<()> {
                 Ok(ev) => {
                     count += 1;
                     handle_event(
-                        &mut out, &mut flows, &dns, &containers, catalog.as_deref(),
-                        dumper.as_mut(), pcap.as_mut(), cert_dumper.as_mut(),
-                        &args, &ev, color,
+                        &mut out,
+                        &mut flows,
+                        &dns,
+                        &containers,
+                        catalog.as_deref(),
+                        dumper.as_mut(),
+                        pcap.as_mut(),
+                        cert_dumper.as_mut(),
+                        &args,
+                        &ev,
+                        color,
                     )?;
                 }
                 Err(err) => tracing::warn!(%err, "skipping unparseable event"),
@@ -137,7 +147,11 @@ async fn run_async(args: TraceArgs) -> Result<()> {
         if let Err(err) = cat.save(path) {
             tracing::error!(%err, path = %path.display(), "saving catalog");
         } else {
-            eprintln!("shannon: catalog saved ({} endpoints) to {}", cat.len(), path.display());
+            eprintln!(
+                "shannon: catalog saved ({} endpoints) to {}",
+                cat.len(),
+                path.display()
+            );
         }
     }
     if let (Some(cat), Some(path)) = (catalog.as_ref(), args.openapi_file.as_ref()) {
@@ -167,7 +181,11 @@ fn banner(args: &TraceArgs, filter: &FilterSetup) {
     if args.openapi_file.is_some() {
         tags.push("openapi".into());
     }
-    let suffix = if tags.is_empty() { String::new() } else { format!(" ({})", tags.join(", ")) };
+    let suffix = if tags.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", tags.join(", "))
+    };
     eprintln!("shannon: attached{suffix}. press ctrl-c to stop.");
 }
 
@@ -197,8 +215,7 @@ fn handle_event(
                     Direction::Tx => PcapDirection::ClientToServer,
                     Direction::Rx => PcapDirection::ServerToClient,
                 };
-                let _ =
-                    pw.write_segment(d.src.0, d.src.1, d.dst.0, d.dst.1, dir, &d.data);
+                let _ = pw.write_segment(d.src.0, d.src.1, d.dst.0, d.dst.1, dir, &d.data);
             }
             if let Some(cd) = cert_dumper {
                 for summary in cd.observe(&d.data) {
@@ -225,7 +242,10 @@ fn handle_event(
                     }
                 }
             }
-            let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
+            let key = FlowKey::Tcp {
+                pid: ctx.tgid,
+                sock_id: d.sock_id,
+            };
             flows.hint_port(key.clone(), d.dst.1);
             let peer = format!("{}:{}", d.dst.0, d.dst.1);
             let records = flows.feed(key, d.direction, &d.data);
@@ -238,13 +258,19 @@ fn handle_event(
             // TLS events don't carry a real 4-tuple — the uprobe fires at
             // the libssl boundary with a conn_id instead. Pcap synthesis
             // requires a 4-tuple, so we skip TLS events in the pcap path.
-            let key = FlowKey::Tls { pid: ctx.tgid, conn_id: d.conn_id };
+            let key = FlowKey::Tls {
+                pid: ctx.tgid,
+                conn_id: d.conn_id,
+            };
             let peer = format!("tls:{:x}", d.conn_id);
             let records = flows.feed(key, d.direction, &d.data);
             dispatch_records(out, d.direction, &peer, &records, catalog, dumper)?;
         }
         DecodedEvent::ConnEnd(ctx, c) => {
-            flows.forget(&FlowKey::Tcp { pid: ctx.tgid, sock_id: c.sock_id });
+            flows.forget(&FlowKey::Tcp {
+                pid: ctx.tgid,
+                sock_id: c.sock_id,
+            });
         }
         DecodedEvent::ConnStart(_, _) | DecodedEvent::Dns(_, _) | DecodedEvent::Sqlite(_, _) => {}
     }
@@ -274,9 +300,7 @@ fn dispatch_records(
             if matches!(hr.kind, Http1Kind::Request) {
                 let method = hr.method.as_deref().unwrap_or("");
                 let path = hr.path.as_deref().unwrap_or("");
-                if let Some(call) =
-                    llm::classify_http_request(method, path, host, &hr.body)
-                {
+                if let Some(call) = llm::classify_http_request(method, path, host, &hr.body) {
                     writeln!(out, "{}  🤖 {}", wall_clock(), call.display_line())?;
                 }
                 // AWS / S3 classifier.
@@ -313,29 +337,22 @@ fn dispatch_records(
                             )?;
                         }
                     }
-                    if let Some(ntlm_b64) =
-                        auth.strip_prefix("NTLM ").or_else(|| auth.strip_prefix("Negotiate "))
+                    if let Some(ntlm_b64) = auth
+                        .strip_prefix("NTLM ")
+                        .or_else(|| auth.strip_prefix("Negotiate "))
                     {
                         if let Some(decoded) = warnings::base64_decode(ntlm_b64) {
                             if let Some(f) = crate::ntlm::classify(&decoded) {
-                                writeln!(
-                                    out,
-                                    "{}  🪟 {}",
-                                    wall_clock(),
-                                    f.display_line()
-                                )?;
+                                writeln!(out, "{}  🪟 {}", wall_clock(), f.display_line())?;
                             }
                         }
                     }
                 }
             }
             if let Some(d) = dumper.as_deref_mut() {
-                if let Some(path) = d.write_http1(
-                    hr,
-                    hr.method.as_deref(),
-                    hr.path.as_deref(),
-                    host,
-                ) {
+                if let Some(path) =
+                    d.write_http1(hr, hr.method.as_deref(), hr.path.as_deref(), host)
+                {
                     writeln!(out, "{}  📥 dumped {}", wall_clock(), path.display())?;
                 }
             }
@@ -540,7 +557,10 @@ fn sql_oneline(sql: &str) -> String {
 }
 
 fn fmt_proc(containers: &ContainerResolver, tgid: u32, comm: &str, cgroup_id: u64) -> String {
-    let tag = containers.lookup(cgroup_id).map(|c| c.render()).unwrap_or_default();
+    let tag = containers
+        .lookup(cgroup_id)
+        .map(|c| c.render())
+        .unwrap_or_default();
     format!("pid={} comm={:<15}{}", tgid, truncate(comm, 15), tag)
 }
 
@@ -568,7 +588,11 @@ fn fmt_ip(ip: &IpAddr) -> String {
 }
 
 fn truncate(s: &str, n: usize) -> &str {
-    if s.len() <= n { s } else { &s[..n] }
+    if s.len() <= n {
+        s
+    } else {
+        &s[..n]
+    }
 }
 
 fn arrow(d: Direction) -> &'static str {
@@ -613,7 +637,9 @@ fn preview(data: &[u8]) -> String {
 }
 
 fn wall_clock() -> String {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let secs = now.as_secs();
     let millis = now.subsec_millis();
     let (h, m, s) = ((secs / 3600) % 24, (secs / 60) % 60, secs % 60);

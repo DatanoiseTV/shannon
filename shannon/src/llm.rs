@@ -85,7 +85,12 @@ impl LlmCall {
 }
 
 /// Classify a captured HTTP request. Returns `None` for non-LLM traffic.
-pub fn classify_http_request(method: &str, path: &str, host: Option<&str>, body: &[u8]) -> Option<LlmCall> {
+pub fn classify_http_request(
+    method: &str,
+    path: &str,
+    host: Option<&str>,
+    body: &[u8],
+) -> Option<LlmCall> {
     if method.eq_ignore_ascii_case("GET") {
         return None;
     }
@@ -98,7 +103,13 @@ pub fn classify_http_request(method: &str, path: &str, host: Option<&str>, body:
     let model = extract_model(body);
     let streaming = body_has_key(body, b"\"stream\"") && body_has_value(body, b"true");
     let prompt_bytes = estimate_prompt_bytes(body);
-    Some(LlmCall { provider, endpoint, model, streaming, prompt_bytes })
+    Some(LlmCall {
+        provider,
+        endpoint,
+        model,
+        streaming,
+        prompt_bytes,
+    })
 }
 
 fn detect_endpoint(path: &str, host: &str) -> Option<(Provider, Endpoint)> {
