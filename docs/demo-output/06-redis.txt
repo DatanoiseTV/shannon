@@ -1,0 +1,12 @@
+23:09:39.796  redis →  SET "demo:greeting" "hello-from-shannon"
+23:09:39.796  redis ←  ["SET", "demo:greeting", "hello-from-shannon"]
+23:09:39.796  redis →  +OK
+23:09:39.796  redis ←  +OK
+23:09:39.796  redis →  GET "demo:greeting"
+23:09:39.796  redis ←  ["GET", "demo:greeting"]
+23:09:39.796  redis →  "hello-from-shannon"
+23:09:39.796  redis ←  "hello-from-shannon"
+23:09:39.796  redis →  INCR "demo:counter"
+23:09:39.796  redis ←  ["INCR", "demo:counter"]
+23:09:39.796  redis →  (integer) 7
+23:09:39.796  redis ←  (integer) 7

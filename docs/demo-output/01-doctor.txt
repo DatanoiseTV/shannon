@@ -1,0 +1,9 @@
+✓  kernel >= 5.8                 running 6.12
+✓  kernel BTF                    /sys/kernel/btf/vmlinux present
+!  rlimit memlock                8 MiB
+     fix: ulimit -l unlimited  # or set LimitMEMLOCK=infinity in the systemd unit
+✓  privileges                    running as root
+✓  libssl (for TLS)              /lib/x86_64-linux-gnu/libssl.so.3
+✓  libsqlite3 (for SQL)          /lib/x86_64-linux-gnu/libsqlite3.so.0
+✓  bpffs mount                   /sys/fs/bpf mounted
+✓  kprobe targets                found all 5 symbols

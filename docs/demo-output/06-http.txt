@@ -1,0 +1,6 @@
+23:09:39.795  http →  GET /success.txt  0 B
+23:09:39.795  http ←  200 OK  8 B
+23:09:39.797  http →  GET /success.txt  0 B
+23:09:39.797  http ←  200 OK  8 B
+23:09:39.798  http →  GET /success.txt  0 B
+23:09:39.798  http ←  200 OK  8 B

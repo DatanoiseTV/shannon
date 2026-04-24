@@ -1,0 +1,12 @@
+23:09:39.796  mqtt →  -> CONNECT v4 client_id=
+23:09:39.796  mqtt ←  <- CONNECT v4 client_id=
+23:09:39.796  mqtt →  -> CONNACK session_present=false rc=0
+23:09:39.797  mqtt ←  <- CONNACK session_present=false rc=0
+23:09:39.797  mqtt →  -> PUBLISH topic=demo/topic qos=0
+23:09:39.797  mqtt →  -> DISCONNECT rc=0
+23:09:39.797  mqtt ←  <- PUBLISH topic=demo/topic qos=0
+23:09:39.797  mqtt ←  <- DISCONNECT rc=0
+23:09:39.798  mqtt →  -> CONNECT v4 client_id=
+23:09:39.798  mqtt ←  <- CONNECT v4 client_id=
+23:09:39.798  mqtt →  -> CONNACK session_present=false rc=0
+23:09:39.798  mqtt ←  <- CONNACK session_present=false rc=0

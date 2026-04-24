@@ -1,0 +1,12 @@
+23:09:39.796  SQL    pid=245293 comm=sqlite3          db=0x56204a3d7aa8  exec: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.796  SQL    pid=245293 comm=sqlite3          db=0x56204a3d7aa8  prepare_v2: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.796  SQL    pid=245293 comm=sqlite3          db=0x56204a3d7aa8  exec: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.796  SQL    pid=245293 comm=sqlite3          db=0x56204a3d7aa8  prepare_v2: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.798  SQL    pid=245308 comm=sqlite3          db=0x55912ec3daa8  exec: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.798  SQL    pid=245308 comm=sqlite3          db=0x55912ec3daa8  prepare_v2: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.798  SQL    pid=245308 comm=sqlite3          db=0x55912ec3daa8  exec: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.798  SQL    pid=245308 comm=sqlite3          db=0x55912ec3daa8  prepare_v2: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.799  SQL    pid=245323 comm=sqlite3          db=0x55b3934d1aa8  exec: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.799  SQL    pid=245323 comm=sqlite3          db=0x55b3934d1aa8  prepare_v2: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.799  SQL    pid=245323 comm=sqlite3          db=0x55b3934d1aa8  exec: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.799  SQL    pid=245323 comm=sqlite3          db=0x55b3934d1aa8  prepare_v2: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid

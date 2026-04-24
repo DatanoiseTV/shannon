@@ -85,8 +85,10 @@ scripts/push-build.sh smoke              # build + run the UDP smoke test
 scripts/push-build.sh shell              # rsync + drop into an ssh session
 ```
 
-See [docs/architecture.md](docs/architecture.md) for how it works and
-[SECURITY.md](SECURITY.md) for what it can and cannot see.
+See [docs/architecture.md](docs/architecture.md) for how it works,
+[SECURITY.md](SECURITY.md) for what it can and cannot see, and
+[DEMO.md](DEMO.md) for a scripted end-to-end run with verbatim output
+from each parser (DNS, HTTP, TLS, Redis, MQTT, CoAP, SQLite uprobes).
 
 ## What it decodes today
 

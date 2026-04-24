@@ -1,0 +1,425 @@
+shannon: attached. press ctrl-c to stop.
+23:09:39.795  UDP→  pid=245285 comm=dig              10.243.243.8:48422 -> 8.8.8.8:53  52 B  'sX. .........example.com.......).........\n...`\.....'
+23:09:39.795  dns →  dns id=29528 ? A example.com
+23:09:39.795  UDP←  pid=245285 comm=dig              10.243.243.8:48422 <- 8.8.8.8:53  72 B  'sX...........example.com..............,..h............,...B....)…'
+23:09:39.795  dns ←  dns id=29528 rcode=NOERROR  example.com -> 104.20.23.154
+23:09:39.795  UDP→  pid=245287 comm=dig              10.243.243.8:45923 -> 8.8.8.8:53  53 B  'o.. .........www.iana.org.......).........\n.....I....'
+23:09:39.795  dns →  dns id=28618 ? A www.iana.org
+23:09:39.795  UDP←  pid=245287 comm=dig              10.243.243.8:45923 <- 8.8.8.8:53  89 B  'o............www.iana.org..................ianawww.vip.icann...*…'
+23:09:39.795  dns ←  dns id=28618 rcode=NOERROR  www.iana.org -> ianawww.vip.icann.org
+23:09:39.795  UDP→  pid=245289 comm=curl             10.243.243.8:35960 -> 8.8.8.8:53  42 B  '.............detectportal.firefox.com.....'
+23:09:39.795  dns →  dns id=237 ? A detectportal.firefox.com
+23:09:39.795  UDP→  pid=245289 comm=curl             10.243.243.8:35960 -> 8.8.8.8:53  42 B  'u............detectportal.firefox.com.....'
+23:09:39.795  dns →  dns id=30184 ? AAAA detectportal.firefox.com
+23:09:39.795  UDP←  pid=245289 comm=curl             10.243.243.8:35960 <- 8.8.8.8:53  153 B  '.............detectportal.firefox.com..................detectpor…'
+23:09:39.795  dns ←  dns id=237 rcode=NOERROR  detectportal.firefox.com -> detectportal.prod.mozaws.net
+23:09:39.795  UDP←  pid=245289 comm=curl             10.243.243.8:35960 <- 8.8.8.8:53  165 B  'u............detectportal.firefox.com..................detectpor…'
+23:09:39.795  dns ←  dns id=30184 rcode=NOERROR  detectportal.firefox.com -> detectportal.prod.mozaws.net
+23:09:39.795  CONN   pid=245289 comm=curl             10.243.243.8:48460 -> 34.107.221.82:80
+23:09:39.795  TCP→  pid=245289 comm=curl             10.243.243.8:48460 -> 34.107.221.82:80  99 B  'GET /success.txt HTTP/1.1\r\nHost: detectportal.firefox.com\r\nUser-…'
+23:09:39.795  http →  GET /success.txt  0 B
+23:09:39.795  TCP←  pid=245289 comm=curl             lab[10.243.243.8]:48460 <- 34.107.221.82:80  216 B  'HTTP/1.1 200 OK\r\nServer: nginx\r\nContent-Length: 8\r\nVia: 1.1 goog…'
+23:09:39.795  http ←  200 OK  8 B
+23:09:39.795  UDP→  pid=245291 comm=curl             lab[10.243.243.8]:51828 -> 8.8.8.8:53  36 B  '.!...........www\ncloudflare.com.....'
+23:09:39.795  dns →  dns id=7713 ? A www.cloudflare.com
+23:09:39.795  UDP→  pid=245291 comm=curl             lab[10.243.243.8]:51828 -> 8.8.8.8:53  36 B  't#...........www\ncloudflare.com.....'
+23:09:39.795  dns →  dns id=29731 ? AAAA www.cloudflare.com
+23:09:39.795  UDP←  pid=245291 comm=curl             lab[10.243.243.8]:51828 <- 8.8.8.8:53  68 B  '.!...........www\ncloudflare.com..............e..h.|`.........e..…'
+23:09:39.795  dns ←  dns id=7713 rcode=NOERROR  www.cloudflare.com -> 104.16.124.96
+23:09:39.795  UDP←  pid=245291 comm=curl             lab[10.243.243.8]:51828 <- 8.8.8.8:53  92 B  't#...........www\ncloudflare.com..............,..&.G.........h.|`…'
+23:09:39.795  dns ←  dns id=29731 rcode=NOERROR  www.cloudflare.com -> 2606:4700::6810:7c60
+23:09:39.795  CONN   pid=245291 comm=curl             lab[10.243.243.8]:39518 -> 104.16.124.96:443
+23:09:39.795  TCP→  pid=245291 comm=curl             lab[10.243.243.8]:39518 -> 104.16.124.96:443  1578 B  '....%...!...T=..R.:.&H..-....6...@A.&.o.f!. Qv..W.Wp......+...\n.…'
+23:09:39.795  tls →  tls ClientHello TLS1.3 sni=www.cloudflare.com alpn=h2,http/1.1 ciphers=30
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  1210 B  '..........I....7.....{.r...Ttl....?iT; Qv..W.Wp......+...\n......…'
+23:09:39.795  tls ←  tls ServerHello TLS1.3 cipher=0x1302
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  1 B  '.'
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '...\n.'
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  2726 B  '.|*...\n...I..-gi5.....K.>...c...E +...xwU...y\r..uQ.....V)..^._.+…'
+23:09:39.795  TCP→  pid=245291 comm=curl             lab[10.243.243.8]:39518 -> 104.16.124.96:443  80 B  '..........E...m...T$0U.Q.N....i. ..`a\tX\nT....?.(.J_.4..k!U...v..…'
+23:09:39.795  TLS→  pid=245291 comm=curl             lib=openssl  118 B  'PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n..............d.....................>...…'
+23:09:39.795  h2 →  h2 stream=0  
+23:09:39.795  h2 →  h2 stream=0  
+23:09:39.795  h2 →  h2 stream=0  
+23:09:39.795  h2 →  h2 stream=1 GET /cdn-cgi/trace
+23:09:39.795  TCP→  pid=245291 comm=curl             lab[10.243.243.8]:39518 -> 104.16.124.96:443  140 B  '.....L.T..v.%..<".v...\nU\t..b4&i..8.$3.$.m..\r...Y....6.u/e)......…'
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  477 B  '.R...<-.#..>*P\n..H..uX(.QnX..cco.<..U...Q..H-..n..n..l){.y6.....…'
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '....9'
+23:09:39.795  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  57 B  '5.M.!.VE...n.n.)..2gH..`.3..i.Ew=\tX.....Q...M.i_~.......#'
+23:09:39.796  TLS←  pid=245291 comm=curl             lib=openssl  40 B  '..............d.........................'
+23:09:39.796  h2 ←  h2 stream=0  
+23:09:39.796  h2 ←  h2 stream=0  
+23:09:39.796  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.796  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  26 B  'd.iE.2]q}p.aY*1..H....O.;.'
+23:09:39.796  TLS←  pid=245291 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.796  h2 ←  h2 stream=0  
+23:09:39.796  TLS→  pid=245291 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.796  h2 →  h2 stream=0  
+23:09:39.796  TCP→  pid=245291 comm=curl             lab[10.243.243.8]:39518 -> 104.16.124.96:443  31 B  '.....)d.M..3.....A...&.f.v.....'
+23:09:39.796  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.796  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  643 B  '....m.I........6.]#.y..,u....+....m.........!\n...[..P?..g..:M...…'
+23:09:39.796  TLS←  pid=245291 comm=curl             lib=openssl  626 B  '..i.......a..a...JC]...qA3p\r\i.1h._.I|.....\..\h.offd..=.J.*e.J.…'
+23:09:39.796  h2 ←  h2 stream=1 200
+23:09:39.796  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.796  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  242 B  '...V..3..g.....$.W..y`.(....<..%O..\c..........\n.b.\t........._+.…'
+23:09:39.796  TLS←  pid=245291 comm=curl             lib=openssl  225 B  '.........fl=67f121\nh=www.cloudflare.com\nip=217.225.62.137\nts=177…'
+23:09:39.796  h2 ←  h2 stream=1 200
+23:09:39.796  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.796  TCP←  pid=245291 comm=curl             lab[10.243.243.8]:39518 <- 104.16.124.96:443  26 B  '...D..px;6...0%?3.Hl<P.\rc~'
+23:09:39.796  TLS←  pid=245291 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.796  h2 ←  h2 stream=1 200
+23:09:39.796  TLS→  pid=245291 comm=curl             lib=openssl  26 B  '.................shutdown.'
+23:09:39.796  h2 →  h2 stream=0  
+23:09:39.796  TCP→  pid=245291 comm=curl             lab[10.243.243.8]:39518 -> 104.16.124.96:443  48 B  '....+..3....~.vD...h....9...\r."&Xk...d..\n.r....f'
+23:09:39.796  TCP→  pid=245291 comm=curl             lab[10.243.243.8]:39518 -> 104.16.124.96:443  24 B  '.....U.yo..g.M.Z.*2.Jf..'
+23:09:39.796  SQL    pid=245293 comm=sqlite3          db=0x56204a3d7aa8  exec: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.796  SQL    pid=245293 comm=sqlite3          db=0x56204a3d7aa8  prepare_v2: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.796  SQL    pid=245293 comm=sqlite3          db=0x56204a3d7aa8  exec: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.796  SQL    pid=245293 comm=sqlite3          db=0x56204a3d7aa8  prepare_v2: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.796  CONN   pid=245294 comm=redis-cli        127.0.0.1:54374 -> 127.0.0.1:6379
+23:09:39.796  CONN   pid=245294 comm=redis-cli        127.0.0.1:6379 -> 127.0.0.1:54374
+23:09:39.796  TCP→  pid=245294 comm=redis-cli        127.0.0.1:54374 -> 127.0.0.1:6379  58 B  '*3\r\n$3\r\nSET\r\n$13\r\ndemo:greeting\r\n$18\r\nhello-from-shannon\r\n'
+23:09:39.796  redis →  SET "demo:greeting" "hello-from-shannon"
+23:09:39.796  TCP←  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54374  58 B  '*3\r\n$3\r\nSET\r\n$13\r\ndemo:greeting\r\n$18\r\nhello-from-shannon\r\n'
+23:09:39.796  redis ←  ["SET", "demo:greeting", "hello-from-shannon"]
+23:09:39.796  TCP→  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54374  5 B  '+OK\r\n'
+23:09:39.796  redis →  +OK
+23:09:39.796  TCP←  pid=245294 comm=redis-cli        127.0.0.1:54374 <- 127.0.0.1:6379  5 B  '+OK\r\n'
+23:09:39.796  redis ←  +OK
+23:09:39.796  CONN   pid=245295 comm=redis-cli        127.0.0.1:54384 -> 127.0.0.1:6379
+23:09:39.796  CONN   pid=245295 comm=redis-cli        127.0.0.1:6379 -> 127.0.0.1:54384
+23:09:39.796  TCP→  pid=245295 comm=redis-cli        127.0.0.1:54384 -> 127.0.0.1:6379  33 B  '*2\r\n$3\r\nGET\r\n$13\r\ndemo:greeting\r\n'
+23:09:39.796  redis →  GET "demo:greeting"
+23:09:39.796  TCP←  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54384  33 B  '*2\r\n$3\r\nGET\r\n$13\r\ndemo:greeting\r\n'
+23:09:39.796  redis ←  ["GET", "demo:greeting"]
+23:09:39.796  TCP→  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54384  25 B  '$18\r\nhello-from-shannon\r\n'
+23:09:39.796  redis →  "hello-from-shannon"
+23:09:39.796  TCP←  pid=245295 comm=redis-cli        127.0.0.1:54384 <- 127.0.0.1:6379  25 B  '$18\r\nhello-from-shannon\r\n'
+23:09:39.796  redis ←  "hello-from-shannon"
+23:09:39.796  CONN   pid=245296 comm=redis-cli        127.0.0.1:54390 -> 127.0.0.1:6379
+23:09:39.796  CONN   pid=245296 comm=redis-cli        127.0.0.1:6379 -> 127.0.0.1:54390
+23:09:39.796  TCP→  pid=245296 comm=redis-cli        127.0.0.1:54390 -> 127.0.0.1:6379  33 B  '*2\r\n$4\r\nINCR\r\n$12\r\ndemo:counter\r\n'
+23:09:39.796  redis →  INCR "demo:counter"
+23:09:39.796  TCP←  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54390  33 B  '*2\r\n$4\r\nINCR\r\n$12\r\ndemo:counter\r\n'
+23:09:39.796  redis ←  ["INCR", "demo:counter"]
+23:09:39.796  TCP→  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54390  4 B  ':7\r\n'
+23:09:39.796  redis →  (integer) 7
+23:09:39.796  TCP←  pid=245296 comm=redis-cli        127.0.0.1:54390 <- 127.0.0.1:6379  4 B  ':7\r\n'
+23:09:39.796  redis ←  (integer) 7
+23:09:39.796  CONN   pid=245297 comm=mosquitto_pub    127.0.0.1:39884 -> 127.0.0.1:1883
+23:09:39.796  CONN   pid=245297 comm=mosquitto_pub    127.0.0.1:1883 -> 127.0.0.1:39884
+23:09:39.796  TCP→  pid=245297 comm=mosquitto_pub    127.0.0.1:39884 -> 127.0.0.1:1883  14 B  '....MQTT...<..'
+23:09:39.796  mqtt →  -> CONNECT v4 client_id=
+23:09:39.796  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39884  1 B  '.'
+23:09:39.796  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39884  1 B  '.'
+23:09:39.796  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39884  12 B  '..MQTT...<..'
+23:09:39.796  mqtt ←  <- CONNECT v4 client_id=
+23:09:39.796  TCP→  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 -> 127.0.0.1:39884  4 B  ' ...'
+23:09:39.796  mqtt →  -> CONNACK session_present=false rc=0
+23:09:39.797  TCP←  pid=245297 comm=mosquitto_pub    127.0.0.1:39884 <- 127.0.0.1:1883  1 B  ' '
+23:09:39.797  TCP←  pid=245297 comm=mosquitto_pub    127.0.0.1:39884 <- 127.0.0.1:1883  1 B  '.'
+23:09:39.797  TCP←  pid=245297 comm=mosquitto_pub    127.0.0.1:39884 <- 127.0.0.1:1883  2 B  '..'
+23:09:39.797  mqtt ←  <- CONNACK session_present=false rc=0
+23:09:39.797  TCP→  pid=245297 comm=mosquitto_pub    127.0.0.1:39884 -> 127.0.0.1:1883  20 B  '0..\ndemo/topictick=1'
+23:09:39.797  mqtt →  -> PUBLISH topic=demo/topic qos=0
+23:09:39.797  TCP→  pid=245297 comm=mosquitto_pub    127.0.0.1:39884 -> 127.0.0.1:1883  2 B  '..'
+23:09:39.797  mqtt →  -> DISCONNECT rc=0
+23:09:39.797  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39884  1 B  '0'
+23:09:39.797  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39884  1 B  '.'
+23:09:39.797  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39884  18 B  '.\ndemo/topictick=1'
+23:09:39.797  mqtt ←  <- PUBLISH topic=demo/topic qos=0
+23:09:39.797  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39884  1 B  '.'
+23:09:39.797  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39884  1 B  '.'
+23:09:39.797  mqtt ←  <- DISCONNECT rc=0
+23:09:39.797  UDP→  pid=245298 comm=coap-client-not  127.0.0.1:36836 -> 127.0.0.1:5683  29 B  'A.._...well-known.core.....X.'
+23:09:39.797  coap →  coap CON GET mid=41055 /.well-known/core 0B
+23:09:39.797  UDP→  pid=245280 comm=coap-server-not  127.0.0.1:5683 -> 127.0.0.1:36836  159 B  'aE._..(.</>;title="General Info";ct=0,</time>;if="clock";rt="tic…'
+23:09:39.797  UDP←  pid=245298 comm=coap-client-not  127.0.0.1:36836 <- 127.0.0.1:5683  159 B  'aE._..(.</>;title="General Info";ct=0,</time>;if="clock";rt="tic…'
+23:09:39.797  coap ←  coap ACK 2.05 Content mid=41055 cf=application/link-format 151B
+23:09:39.797  UDP→  pid=245300 comm=dig              lab[10.243.243.8]:47747 -> 8.8.8.8:53  52 B  '... .........example.com.......).........\n..W$/..Em,'
+23:09:39.797  dns →  dns id=40633 ? A example.com
+23:09:39.797  UDP←  pid=245300 comm=dig              lab[10.243.243.8]:47747 <- 8.8.8.8:53  72 B  '.............example.com..............+...B...........+..h.....)…'
+23:09:39.797  dns ←  dns id=40633 rcode=NOERROR  example.com -> 172.66.147.243
+23:09:39.797  UDP→  pid=245302 comm=dig              lab[10.243.243.8]:41109 -> 8.8.8.8:53  53 B  '.b. .........www.iana.org.......).........\n../....29;'
+23:09:39.797  dns →  dns id=56418 ? A www.iana.org
+23:09:39.797  UDP←  pid=245302 comm=dig              lab[10.243.243.8]:41109 <- 8.8.8.8:53  89 B  '.b...........www.iana.org..................ianawww.vip.icann...*…'
+23:09:39.797  dns ←  dns id=56418 rcode=NOERROR  www.iana.org -> ianawww.vip.icann.org
+23:09:39.797  UDP→  pid=245304 comm=curl             lab[10.243.243.8]:47857 -> 8.8.8.8:53  42 B  '6|...........detectportal.firefox.com.....'
+23:09:39.797  dns →  dns id=13948 ? A detectportal.firefox.com
+23:09:39.797  UDP→  pid=245304 comm=curl             lab[10.243.243.8]:47857 -> 8.8.8.8:53  42 B  '.............detectportal.firefox.com.....'
+23:09:39.797  dns →  dns id=1407 ? AAAA detectportal.firefox.com
+23:09:39.797  UDP←  pid=245304 comm=curl             lab[10.243.243.8]:47857 <- 8.8.8.8:53  165 B  '.............detectportal.firefox.com..................detectpor…'
+23:09:39.797  dns ←  dns id=1407 rcode=NOERROR  detectportal.firefox.com -> detectportal.prod.mozaws.net
+23:09:39.797  UDP←  pid=245304 comm=curl             lab[10.243.243.8]:47857 <- 8.8.8.8:53  153 B  '6|...........detectportal.firefox.com..................detectpor…'
+23:09:39.797  dns ←  dns id=13948 rcode=NOERROR  detectportal.firefox.com -> detectportal.prod.mozaws.net
+23:09:39.797  CONN   pid=245304 comm=curl             lab[10.243.243.8]:48476 -> 34.107.221.82:80
+23:09:39.797  TCP→  pid=245304 comm=curl             lab[10.243.243.8]:48476 -> 34.107.221.82:80  99 B  'GET /success.txt HTTP/1.1\r\nHost: detectportal.firefox.com\r\nUser-…'
+23:09:39.797  http →  GET /success.txt  0 B
+23:09:39.797  TCP←  pid=245304 comm=curl             lab[10.243.243.8]:48476 <- 34.107.221.82:80  216 B  'HTTP/1.1 200 OK\r\nServer: nginx\r\nContent-Length: 8\r\nVia: 1.1 goog…'
+23:09:39.797  http ←  200 OK  8 B
+23:09:39.797  UDP→  pid=245306 comm=curl             lab[10.243.243.8]:51236 -> 8.8.8.8:53  36 B  ':............www\ncloudflare.com.....'
+23:09:39.797  dns →  dns id=15043 ? A www.cloudflare.com
+23:09:39.797  UDP→  pid=245306 comm=curl             lab[10.243.243.8]:51236 -> 8.8.8.8:53  36 B  '.............www\ncloudflare.com.....'
+23:09:39.797  dns →  dns id=38604 ? AAAA www.cloudflare.com
+23:09:39.797  UDP←  pid=245306 comm=curl             lab[10.243.243.8]:51236 <- 8.8.8.8:53  68 B  ':............www\ncloudflare.com..............d..h.{`.........d..…'
+23:09:39.797  dns ←  dns id=15043 rcode=NOERROR  www.cloudflare.com -> 104.16.123.96
+23:09:39.797  UDP←  pid=245306 comm=curl             lab[10.243.243.8]:51236 <- 8.8.8.8:53  92 B  '.............www\ncloudflare.com..............,..&.G.........h.|`…'
+23:09:39.797  dns ←  dns id=38604 rcode=NOERROR  www.cloudflare.com -> 2606:4700::6810:7c60
+23:09:39.797  CONN   pid=245306 comm=curl             lab[10.243.243.8]:46992 -> 104.16.123.96:443
+23:09:39.797  TCP→  pid=245306 comm=curl             lab[10.243.243.8]:46992 -> 104.16.123.96:443  1578 B  '....%...!.....-......1....2.#B..A...s:.[.8. ...6.b.c.\r;8 .g.lUN1…'
+23:09:39.797  tls →  tls ClientHello TLS1.3 sni=www.cloudflare.com alpn=h2,http/1.1 ciphers=30
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '.....'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  1210 B  '......3..._.5~~.F$....X.....*0/...f... ...6.b.c.\r;8 .g.lUN1.....…'
+23:09:39.797  tls ←  tls ServerHello TLS1.3 cipher=0x1302
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '.....'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  1 B  '.'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '...\n.'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  2725 B  '.\.X....,...e..RV....n..x..!.F.. ..T.)G.p0./-W.......E..|H.J.Nl"…'
+23:09:39.797  TCP→  pid=245306 comm=curl             lab[10.243.243.8]:46992 -> 104.16.123.96:443  80 B  '..........E......4\r~.<.\\n_t..4).*.e....J..NU......n....:aP:.A...…'
+23:09:39.797  TLS→  pid=245306 comm=curl             lib=openssl  118 B  'PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n..............d.....................>...…'
+23:09:39.797  h2 →  h2 stream=0  
+23:09:39.797  h2 →  h2 stream=0  
+23:09:39.797  h2 →  h2 stream=0  
+23:09:39.797  h2 →  h2 stream=1 GET /cdn-cgi/trace
+23:09:39.797  TCP→  pid=245306 comm=curl             lab[10.243.243.8]:46992 -> 104.16.123.96:443  140 B  '....."`...L..x..]..r.p.....1.....qf.*e.....N_..t...^.-X&..".]...…'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '.....'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  477 B  '.S....l^......Vz......d$.....g....Qov>cl..r....3.sN..9.!.......!…'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '....9'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  57 B  '..R..1..\t.!....V..(...\.4...&e.....E.:C..\r4Q...J~....W.kY'
+23:09:39.797  TLS←  pid=245306 comm=curl             lib=openssl  40 B  '..............d.........................'
+23:09:39.797  h2 ←  h2 stream=0  
+23:09:39.797  h2 ←  h2 stream=0  
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '.....'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  26 B  '.C@....c.K5..U.qz.Y.M.b...'
+23:09:39.797  TLS←  pid=245306 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.797  h2 ←  h2 stream=0  
+23:09:39.797  TLS→  pid=245306 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.797  h2 →  h2 stream=0  
+23:09:39.797  TCP→  pid=245306 comm=curl             lab[10.243.243.8]:46992 -> 104.16.123.96:443  31 B  '.....+./0.If......#.d...n..R...'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '....{'
+23:09:39.797  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  635 B  ']g.....Op.gS.i.Y..o..t.........}>..Q......w...nR..O.o.I....6b...…'
+23:09:39.797  TLS←  pid=245306 comm=curl             lib=openssl  618 B  '..a.......a..a...JC]...qA3p\r\i.1h._.I|.....\..[h.offd..=.J.*e.J.…'
+23:09:39.798  h2 ←  h2 stream=1 200
+23:09:39.798  TLS→  pid=245306 comm=curl             lib=openssl  26 B  '..........................'
+23:09:39.798  h2 →  h2 stream=1  
+23:09:39.798  h2 →  h2 stream=1  
+23:09:39.798  TCP→  pid=245306 comm=curl             lab[10.243.243.8]:46992 -> 104.16.123.96:443  48 B  '....+O.;..6,..0.0.(.Yg\......w..@..C.!..R'.0...Y'
+23:09:39.798  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '.....'
+23:09:39.798  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  241 B  'A!..II........j.TM.:........R..G1.9..S_.&a.eHh%4bC]zH3.=z.Z.....…'
+23:09:39.798  TLS←  pid=245306 comm=curl             lib=openssl  224 B  '.........fl=67f87\nh=www.cloudflare.com\nip=217.225.62.137\nts=1777…'
+23:09:39.798  h2 ←  h2 stream=1 200
+23:09:39.798  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  5 B  '.....'
+23:09:39.798  TCP←  pid=245306 comm=curl             lab[10.243.243.8]:46992 <- 104.16.123.96:443  26 B  '...x.~G...q.....0....GF.2.'
+23:09:39.798  TLS←  pid=245306 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.798  h2 ←  h2 stream=1 200
+23:09:39.798  TLS→  pid=245306 comm=curl             lib=openssl  26 B  '.................shutdown.'
+23:09:39.798  h2 →  h2 stream=0  
+23:09:39.798  TCP→  pid=245306 comm=curl             lab[10.243.243.8]:46992 -> 104.16.123.96:443  48 B  '....+.<..-..~..Z."Mg...\.......#.:..wC...:/1#\8.'
+23:09:39.798  TCP→  pid=245306 comm=curl             lab[10.243.243.8]:46992 -> 104.16.123.96:443  24 B  '......m9..;....g.~..`K..'
+23:09:39.798  SQL    pid=245308 comm=sqlite3          db=0x55912ec3daa8  exec: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.798  SQL    pid=245308 comm=sqlite3          db=0x55912ec3daa8  prepare_v2: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.798  SQL    pid=245308 comm=sqlite3          db=0x55912ec3daa8  exec: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.798  SQL    pid=245308 comm=sqlite3          db=0x55912ec3daa8  prepare_v2: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.798  CONN   pid=245309 comm=redis-cli        127.0.0.1:54392 -> 127.0.0.1:6379
+23:09:39.798  CONN   pid=245309 comm=redis-cli        127.0.0.1:6379 -> 127.0.0.1:54392
+23:09:39.798  TCP→  pid=245309 comm=redis-cli        127.0.0.1:54392 -> 127.0.0.1:6379  58 B  '*3\r\n$3\r\nSET\r\n$13\r\ndemo:greeting\r\n$18\r\nhello-from-shannon\r\n'
+23:09:39.798  redis →  SET "demo:greeting" "hello-from-shannon"
+23:09:39.798  TCP←  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54392  58 B  '*3\r\n$3\r\nSET\r\n$13\r\ndemo:greeting\r\n$18\r\nhello-from-shannon\r\n'
+23:09:39.798  redis ←  ["SET", "demo:greeting", "hello-from-shannon"]
+23:09:39.798  TCP→  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54392  5 B  '+OK\r\n'
+23:09:39.798  redis →  +OK
+23:09:39.798  TCP←  pid=245309 comm=redis-cli        127.0.0.1:54392 <- 127.0.0.1:6379  5 B  '+OK\r\n'
+23:09:39.798  redis ←  +OK
+23:09:39.798  CONN   pid=245310 comm=redis-cli        127.0.0.1:54408 -> 127.0.0.1:6379
+23:09:39.798  CONN   pid=245310 comm=redis-cli        127.0.0.1:6379 -> 127.0.0.1:54408
+23:09:39.798  TCP→  pid=245310 comm=redis-cli        127.0.0.1:54408 -> 127.0.0.1:6379  33 B  '*2\r\n$3\r\nGET\r\n$13\r\ndemo:greeting\r\n'
+23:09:39.798  redis →  GET "demo:greeting"
+23:09:39.798  TCP←  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54408  33 B  '*2\r\n$3\r\nGET\r\n$13\r\ndemo:greeting\r\n'
+23:09:39.798  redis ←  ["GET", "demo:greeting"]
+23:09:39.798  TCP→  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54408  25 B  '$18\r\nhello-from-shannon\r\n'
+23:09:39.798  redis →  "hello-from-shannon"
+23:09:39.798  TCP←  pid=245310 comm=redis-cli        127.0.0.1:54408 <- 127.0.0.1:6379  25 B  '$18\r\nhello-from-shannon\r\n'
+23:09:39.798  redis ←  "hello-from-shannon"
+23:09:39.798  CONN   pid=245311 comm=redis-cli        127.0.0.1:54412 -> 127.0.0.1:6379
+23:09:39.798  CONN   pid=245311 comm=redis-cli        127.0.0.1:6379 -> 127.0.0.1:54412
+23:09:39.798  TCP→  pid=245311 comm=redis-cli        127.0.0.1:54412 -> 127.0.0.1:6379  33 B  '*2\r\n$4\r\nINCR\r\n$12\r\ndemo:counter\r\n'
+23:09:39.798  redis →  INCR "demo:counter"
+23:09:39.798  TCP←  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54412  33 B  '*2\r\n$4\r\nINCR\r\n$12\r\ndemo:counter\r\n'
+23:09:39.798  redis ←  ["INCR", "demo:counter"]
+23:09:39.798  TCP→  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54412  4 B  ':8\r\n'
+23:09:39.798  redis →  (integer) 8
+23:09:39.798  TCP←  pid=245311 comm=redis-cli        127.0.0.1:54412 <- 127.0.0.1:6379  4 B  ':8\r\n'
+23:09:39.798  redis ←  (integer) 8
+23:09:39.798  CONN   pid=245312 comm=mosquitto_pub    127.0.0.1:39892 -> 127.0.0.1:1883
+23:09:39.798  CONN   pid=245312 comm=mosquitto_pub    127.0.0.1:1883 -> 127.0.0.1:39892
+23:09:39.798  TCP→  pid=245312 comm=mosquitto_pub    127.0.0.1:39892 -> 127.0.0.1:1883  14 B  '....MQTT...<..'
+23:09:39.798  mqtt →  -> CONNECT v4 client_id=
+23:09:39.798  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39892  1 B  '.'
+23:09:39.798  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39892  1 B  '.'
+23:09:39.798  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39892  12 B  '..MQTT...<..'
+23:09:39.798  mqtt ←  <- CONNECT v4 client_id=
+23:09:39.798  TCP→  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 -> 127.0.0.1:39892  4 B  ' ...'
+23:09:39.798  mqtt →  -> CONNACK session_present=false rc=0
+23:09:39.798  TCP←  pid=245312 comm=mosquitto_pub    127.0.0.1:39892 <- 127.0.0.1:1883  1 B  ' '
+23:09:39.798  TCP←  pid=245312 comm=mosquitto_pub    127.0.0.1:39892 <- 127.0.0.1:1883  1 B  '.'
+23:09:39.798  TCP←  pid=245312 comm=mosquitto_pub    127.0.0.1:39892 <- 127.0.0.1:1883  2 B  '..'
+23:09:39.798  mqtt ←  <- CONNACK session_present=false rc=0
+23:09:39.798  TCP→  pid=245312 comm=mosquitto_pub    127.0.0.1:39892 -> 127.0.0.1:1883  20 B  '0..\ndemo/topictick=2'
+23:09:39.798  mqtt →  -> PUBLISH topic=demo/topic qos=0
+23:09:39.798  TCP→  pid=245312 comm=mosquitto_pub    127.0.0.1:39892 -> 127.0.0.1:1883  2 B  '..'
+23:09:39.798  mqtt →  -> DISCONNECT rc=0
+23:09:39.798  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39892  1 B  '0'
+23:09:39.798  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39892  1 B  '.'
+23:09:39.798  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39892  18 B  '.\ndemo/topictick=2'
+23:09:39.798  mqtt ←  <- PUBLISH topic=demo/topic qos=0
+23:09:39.798  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39892  1 B  '.'
+23:09:39.798  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39892  1 B  '.'
+23:09:39.798  mqtt ←  <- DISCONNECT rc=0
+23:09:39.798  UDP→  pid=245313 comm=coap-client-not  127.0.0.1:36374 -> 127.0.0.1:5683  29 B  'A..\n...well-known.core.....9.'
+23:09:39.798  coap →  coap CON GET mid=43274 /.well-known/core 0B
+23:09:39.798  UDP→  pid=245280 comm=coap-server-not  127.0.0.1:5683 -> 127.0.0.1:36374  159 B  'aE.\n..(.</>;title="General Info";ct=0,</time>;if="clock";rt="tic…'
+23:09:39.798  UDP←  pid=245313 comm=coap-client-not  127.0.0.1:36374 <- 127.0.0.1:5683  159 B  'aE.\n..(.</>;title="General Info";ct=0,</time>;if="clock";rt="tic…'
+23:09:39.798  coap ←  coap ACK 2.05 Content mid=43274 cf=application/link-format 151B
+23:09:39.798  UDP→  pid=245315 comm=dig              lab[10.243.243.8]:60383 -> 8.8.8.8:53  52 B  '... .........example.com.......).........\n...W..QUR.'
+23:09:39.798  dns →  dns id=49640 ? A example.com
+23:09:39.798  UDP←  pid=245315 comm=dig              lab[10.243.243.8]:60383 <- 8.8.8.8:53  72 B  '.............example.com..............,...B...........,..h.....)…'
+23:09:39.798  dns ←  dns id=49640 rcode=NOERROR  example.com -> 172.66.147.243
+23:09:39.798  UDP→  pid=245317 comm=dig              lab[10.243.243.8]:56124 -> 8.8.8.8:53  53 B  '7.. .........www.iana.org.......).........\n../.......'
+23:09:39.798  dns →  dns id=14091 ? A www.iana.org
+23:09:39.798  UDP←  pid=245317 comm=dig              lab[10.243.243.8]:56124 <- 8.8.8.8:53  89 B  '7............www.iana.org..................ianawww.vip.icann...*…'
+23:09:39.798  dns ←  dns id=14091 rcode=NOERROR  www.iana.org -> ianawww.vip.icann.org
+23:09:39.798  UDP→  pid=245319 comm=curl             lab[10.243.243.8]:57685 -> 8.8.8.8:53  42 B  '.............detectportal.firefox.com.....'
+23:09:39.798  dns →  dns id=63499 ? A detectportal.firefox.com
+23:09:39.798  UDP→  pid=245319 comm=curl             lab[10.243.243.8]:57685 -> 8.8.8.8:53  42 B  '.............detectportal.firefox.com.....'
+23:09:39.798  dns →  dns id=40718 ? AAAA detectportal.firefox.com
+23:09:39.798  UDP←  pid=245319 comm=curl             lab[10.243.243.8]:57685 <- 8.8.8.8:53  165 B  '.............detectportal.firefox.com..............&...detectpor…'
+23:09:39.798  dns ←  dns id=40718 rcode=NOERROR  detectportal.firefox.com -> detectportal.prod.mozaws.net
+23:09:39.798  UDP←  pid=245319 comm=curl             lab[10.243.243.8]:57685 <- 8.8.8.8:53  153 B  '.............detectportal.firefox.com..................detectpor…'
+23:09:39.798  dns ←  dns id=63499 rcode=NOERROR  detectportal.firefox.com -> detectportal.prod.mozaws.net
+23:09:39.798  CONN   pid=245319 comm=curl             lab[10.243.243.8]:48492 -> 34.107.221.82:80
+23:09:39.798  TCP→  pid=245319 comm=curl             lab[10.243.243.8]:48492 -> 34.107.221.82:80  99 B  'GET /success.txt HTTP/1.1\r\nHost: detectportal.firefox.com\r\nUser-…'
+23:09:39.798  http →  GET /success.txt  0 B
+23:09:39.798  TCP←  pid=245319 comm=curl             lab[10.243.243.8]:48492 <- 34.107.221.82:80  216 B  'HTTP/1.1 200 OK\r\nServer: nginx\r\nContent-Length: 8\r\nVia: 1.1 goog…'
+23:09:39.798  http ←  200 OK  8 B
+23:09:39.798  UDP→  pid=245321 comm=curl             lab[10.243.243.8]:51886 -> 8.8.8.8:53  36 B  '.............www\ncloudflare.com.....'
+23:09:39.798  dns →  dns id=50127 ? A www.cloudflare.com
+23:09:39.798  UDP→  pid=245321 comm=curl             lab[10.243.243.8]:51886 -> 8.8.8.8:53  36 B  '2............www\ncloudflare.com.....'
+23:09:39.798  dns →  dns id=13004 ? AAAA www.cloudflare.com
+23:09:39.798  UDP←  pid=245321 comm=curl             lab[10.243.243.8]:51886 <- 8.8.8.8:53  92 B  '2............www\ncloudflare.com..............*..&.G.........h.{`…'
+23:09:39.798  dns ←  dns id=13004 rcode=NOERROR  www.cloudflare.com -> 2606:4700::6810:7b60
+23:09:39.798  UDP←  pid=245321 comm=curl             lab[10.243.243.8]:51886 <- 8.8.8.8:53  68 B  '.............www\ncloudflare.com..............b..h.|`.........b..…'
+23:09:39.798  dns ←  dns id=50127 rcode=NOERROR  www.cloudflare.com -> 104.16.124.96
+23:09:39.798  CONN   pid=245321 comm=curl             lab[10.243.243.8]:39524 -> 104.16.124.96:443
+23:09:39.798  TCP→  pid=245321 comm=curl             lab[10.243.243.8]:39524 -> 104.16.124.96:443  1578 B  '....%...!..p..>X0..$......`f9..iZ.l.`..T5.% ^w(hQ.e...Q.....F...…'
+23:09:39.798  tls →  tls ClientHello TLS1.3 sni=www.cloudflare.com alpn=h2,http/1.1 ciphers=30
+23:09:39.798  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.798  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  1210 B  '......0%.o...v......._m...~(...jJ..E'> ^w(hQ.e...Q.....F...i=rH.…'
+23:09:39.798  tls ←  tls ServerHello TLS1.3 cipher=0x1302
+23:09:39.798  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.798  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  1 B  '.'
+23:09:39.798  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '...\n.'
+23:09:39.798  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  2726 B  '.......7.8e.e.......4.0..........j..|..5p.9.p\(.B.....U......'.>…'
+23:09:39.798  TCP→  pid=245321 comm=curl             lab[10.243.243.8]:39524 -> 104.16.124.96:443  80 B  '..........Ew...^..NL./N=.Z.l..kR-.dK.cn..-.<...A-..y..0|N.x.....…'
+23:09:39.798  TLS→  pid=245321 comm=curl             lib=openssl  118 B  'PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n..............d.....................>...…'
+23:09:39.799  h2 →  h2 stream=0  
+23:09:39.799  h2 →  h2 stream=0  
+23:09:39.799  h2 →  h2 stream=0  
+23:09:39.799  h2 →  h2 stream=1 GET /cdn-cgi/trace
+23:09:39.799  TCP→  pid=245321 comm=curl             lab[10.243.243.8]:39524 -> 104.16.124.96:443  140 B  '........3.,.(......K.......Q.)s6.y.\r...Z\........%..jTj._.{...<.…'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  477 B  '......... 1.K.....:....o.........I..e.x......I...e1.$..+\r...{...…'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '....9'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  57 B  '..*..Z...G#*o.]...O....s|."o....5..W....JP..[k..E..S...~.'
+23:09:39.799  TLS←  pid=245321 comm=curl             lib=openssl  40 B  '..............d.........................'
+23:09:39.799  h2 ←  h2 stream=0  
+23:09:39.799  h2 ←  h2 stream=0  
+23:09:39.799  TLS→  pid=245321 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.799  h2 →  h2 stream=0  
+23:09:39.799  TCP→  pid=245321 comm=curl             lab[10.243.243.8]:39524 -> 104.16.124.96:443  31 B  '........Wf(..@?m{n........j...;'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  26 B  '...$.l.WP6v.jV..X..g7.e.MQ'
+23:09:39.799  TLS←  pid=245321 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.799  h2 ←  h2 stream=0  
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '....{'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  635 B  '.ei[~.9..........I....u...^.`V.........+Z..H2...C~.<>W..^.;...fq…'
+23:09:39.799  TLS←  pid=245321 comm=curl             lib=openssl  618 B  '..a.......a..a...JC]...qA3p\r\i.1h._.I|.....\..\h.offd..=.J.*e.J.…'
+23:09:39.799  h2 ←  h2 stream=1 200
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  242 B  '#l.|.............P..q.F...j.x..dRz..7.......1....1c....y"....0..…'
+23:09:39.799  TLS←  pid=245321 comm=curl             lib=openssl  225 B  '.........fl=67f149\nh=www.cloudflare.com\nip=217.225.62.137\nts=177…'
+23:09:39.799  h2 ←  h2 stream=1 200
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  5 B  '.....'
+23:09:39.799  TCP←  pid=245321 comm=curl             lab[10.243.243.8]:39524 <- 104.16.124.96:443  26 B  '...F.x....k..L@.f..*.D:...'
+23:09:39.799  TLS←  pid=245321 comm=curl             lib=openssl  9 B  '.........'
+23:09:39.799  h2 ←  h2 stream=1 200
+23:09:39.799  TLS→  pid=245321 comm=curl             lib=openssl  26 B  '.................shutdown.'
+23:09:39.799  h2 →  h2 stream=0  
+23:09:39.799  TCP→  pid=245321 comm=curl             lab[10.243.243.8]:39524 -> 104.16.124.96:443  48 B  '....+he.7....pf.6*...v..C.u.........U.O.....R...'
+23:09:39.799  TCP→  pid=245321 comm=curl             lab[10.243.243.8]:39524 -> 104.16.124.96:443  24 B  '......|.\n.....\r.5.f0.Q}`'
+23:09:39.799  SQL    pid=245323 comm=sqlite3          db=0x55b3934d1aa8  exec: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.799  SQL    pid=245323 comm=sqlite3          db=0x55b3934d1aa8  prepare_v2: SELECT*FROM"main".sqlite_master ORDER BY rowid
+23:09:39.799  SQL    pid=245323 comm=sqlite3          db=0x55b3934d1aa8  exec: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.799  SQL    pid=245323 comm=sqlite3          db=0x55b3934d1aa8  prepare_v2: SELECT*FROM"main".sqlite_master WHERE tbl_name='users' AND type!='trigger' ORDER BY rowid
+23:09:39.799  CONN   pid=245324 comm=redis-cli        127.0.0.1:54422 -> 127.0.0.1:6379
+23:09:39.799  CONN   pid=245310 comm=redis-cli        127.0.0.1:6379 -> 127.0.0.1:54422
+23:09:39.799  TCP→  pid=245324 comm=redis-cli        127.0.0.1:54422 -> 127.0.0.1:6379  58 B  '*3\r\n$3\r\nSET\r\n$13\r\ndemo:greeting\r\n$18\r\nhello-from-shannon\r\n'
+23:09:39.799  redis →  SET "demo:greeting" "hello-from-shannon"
+23:09:39.799  TCP←  pid=245310 comm=redis-cli      [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54422  58 B  '*3\r\n$3\r\nSET\r\n$13\r\ndemo:greeting\r\n$18\r\nhello-from-shannon\r\n'
+23:09:39.799  redis ←  ["SET", "demo:greeting", "hello-from-shannon"]
+23:09:39.799  TCP→  pid=245310 comm=redis-cli      [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54422  5 B  '+OK\r\n'
+23:09:39.799  redis →  +OK
+23:09:39.799  TCP←  pid=245324 comm=redis-cli        127.0.0.1:54422 <- 127.0.0.1:6379  5 B  '+OK\r\n'
+23:09:39.799  redis ←  +OK
+23:09:39.799  CONN   pid=245325 comm=redis-cli        127.0.0.1:54432 -> 127.0.0.1:6379
+23:09:39.799  CONN   pid=245325 comm=redis-cli        127.0.0.1:6379 -> 127.0.0.1:54432
+23:09:39.799  TCP→  pid=245325 comm=redis-cli        127.0.0.1:54432 -> 127.0.0.1:6379  33 B  '*2\r\n$3\r\nGET\r\n$13\r\ndemo:greeting\r\n'
+23:09:39.799  redis →  GET "demo:greeting"
+23:09:39.799  TCP←  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54432  33 B  '*2\r\n$3\r\nGET\r\n$13\r\ndemo:greeting\r\n'
+23:09:39.799  redis ←  ["GET", "demo:greeting"]
+23:09:39.799  TCP→  pid=239235 comm=redis-server   [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54432  25 B  '$18\r\nhello-from-shannon\r\n'
+23:09:39.799  redis →  "hello-from-shannon"
+23:09:39.799  TCP←  pid=245325 comm=redis-cli        127.0.0.1:54432 <- 127.0.0.1:6379  25 B  '$18\r\nhello-from-shannon\r\n'
+23:09:39.799  redis ←  "hello-from-shannon"
+23:09:39.799  CONN   pid=245326 comm=redis-cli        127.0.0.1:54444 -> 127.0.0.1:6379
+23:09:39.799  CONN   pid=245319 comm=curl             127.0.0.1:6379 -> 127.0.0.1:54444
+23:09:39.799  TCP→  pid=245326 comm=redis-cli        127.0.0.1:54444 -> 127.0.0.1:6379  33 B  '*2\r\n$4\r\nINCR\r\n$12\r\ndemo:counter\r\n'
+23:09:39.799  redis →  INCR "demo:counter"
+23:09:39.799  TCP←  pid=245319 comm=curl           [systemd/redis-server]  127.0.0.1:6379 <- 127.0.0.1:54444  33 B  '*2\r\n$4\r\nINCR\r\n$12\r\ndemo:counter\r\n'
+23:09:39.799  TCP→  pid=245319 comm=curl           [systemd/redis-server]  127.0.0.1:6379 -> 127.0.0.1:54444  4 B  ':9\r\n'
+23:09:39.799  TCP←  pid=245326 comm=redis-cli        127.0.0.1:54444 <- 127.0.0.1:6379  4 B  ':9\r\n'
+23:09:39.799  redis ←  (integer) 9
+23:09:39.799  CONN   pid=245327 comm=mosquitto_pub    127.0.0.1:39896 -> 127.0.0.1:1883
+23:09:39.799  CONN   pid=245327 comm=mosquitto_pub    127.0.0.1:1883 -> 127.0.0.1:39896
+23:09:39.799  TCP→  pid=245327 comm=mosquitto_pub    127.0.0.1:39896 -> 127.0.0.1:1883  14 B  '....MQTT...<..'
+23:09:39.799  mqtt →  -> CONNECT v4 client_id=
+23:09:39.800  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39896  1 B  '.'
+23:09:39.800  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39896  1 B  '.'
+23:09:39.800  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39896  12 B  '..MQTT...<..'
+23:09:39.800  mqtt ←  <- CONNECT v4 client_id=
+23:09:39.800  TCP→  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 -> 127.0.0.1:39896  4 B  ' ...'
+23:09:39.800  mqtt →  -> CONNACK session_present=false rc=0
+23:09:39.800  TCP←  pid=245327 comm=mosquitto_pub    127.0.0.1:39896 <- 127.0.0.1:1883  1 B  ' '
+23:09:39.800  TCP←  pid=245327 comm=mosquitto_pub    127.0.0.1:39896 <- 127.0.0.1:1883  1 B  '.'
+23:09:39.800  TCP←  pid=245327 comm=mosquitto_pub    127.0.0.1:39896 <- 127.0.0.1:1883  2 B  '..'
+23:09:39.800  mqtt ←  <- CONNACK session_present=false rc=0
+23:09:39.800  TCP→  pid=245327 comm=mosquitto_pub    127.0.0.1:39896 -> 127.0.0.1:1883  20 B  '0..\ndemo/topictick=3'
+23:09:39.800  mqtt →  -> PUBLISH topic=demo/topic qos=0
+23:09:39.800  TCP→  pid=245327 comm=mosquitto_pub    127.0.0.1:39896 -> 127.0.0.1:1883  2 B  '..'
+23:09:39.800  mqtt →  -> DISCONNECT rc=0
+23:09:39.800  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39896  1 B  '0'
+23:09:39.800  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39896  1 B  '.'
+23:09:39.800  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39896  18 B  '.\ndemo/topictick=3'
+23:09:39.800  mqtt ←  <- PUBLISH topic=demo/topic qos=0
+23:09:39.800  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39896  1 B  '.'
+23:09:39.800  TCP←  pid=239149 comm=mosquitto      [systemd/mosquitto]  127.0.0.1:1883 <- 127.0.0.1:39896  1 B  '.'
+23:09:39.800  mqtt ←  <- DISCONNECT rc=0
+23:09:39.800  UDP→  pid=245328 comm=coap-client-not  127.0.0.1:52243 -> 127.0.0.1:5683  29 B  'A......well-known.core...[.^S'
+23:09:39.800  coap →  coap CON GET mid=46766 /.well-known/core 0B
+23:09:39.800  UDP→  pid=245280 comm=coap-server-not  127.0.0.1:5683 -> 127.0.0.1:52243  159 B  'aE....(.</>;title="General Info";ct=0,</time>;if="clock";rt="tic…'
+23:09:39.800  UDP←  pid=245328 comm=coap-client-not  127.0.0.1:52243 <- 127.0.0.1:5683  159 B  'aE....(.</>;title="General Info";ct=0,</time>;if="clock";rt="tic…'
+23:09:39.800  coap ←  coap ACK 2.05 Content mid=46766 cf=application/link-format 151B
+23:09:39.800  UDP→  pid=16021 comm=nmbd           [systemd/nmbd]  0.0.0.0:137 -> 10.243.255.255:137  50 B  ']^.......... FHEPFCELEHFCEPFFFACACACACACACABN.. ..'
+shannon: replayed 273 event(s) from /tmp/shannon-demo/capture.jsonl.zst

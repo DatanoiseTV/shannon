@@ -1,0 +1,6 @@
+23:09:39.797  coap →  coap CON GET mid=41055 /.well-known/core 0B
+23:09:39.797  coap ←  coap ACK 2.05 Content mid=41055 cf=application/link-format 151B
+23:09:39.798  coap →  coap CON GET mid=43274 /.well-known/core 0B
+23:09:39.798  coap ←  coap ACK 2.05 Content mid=43274 cf=application/link-format 151B
+23:09:39.800  coap →  coap CON GET mid=46766 /.well-known/core 0B
+23:09:39.800  coap ←  coap ACK 2.05 Content mid=46766 cf=application/link-format 151B

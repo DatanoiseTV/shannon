@@ -1,0 +1,53 @@
+shannon analyze — 273 lines (0 unparseable)
+duration: 291.3s
+bytes:    tx=8.3 KiB  rx=22.2 KiB
+
+event kinds:
+  tcp_data      206
+  conn_start    30
+  tls_data      25
+  sqlite        12
+
+top processes:
+  pid=245306 comm=curl             events=39       tx=2.1 KiB rx=6.4 KiB
+  pid=245321 comm=curl             events=37       tx=2.1 KiB rx=6.4 KiB
+  pid=245291 comm=curl             events=37       tx=2.1 KiB rx=6.4 KiB
+  pid=239149 comm=mosquitto        events=27       tx=12 B rx=108 B
+  pid=239235 comm=redis-server     events=14       tx=93 B rx=281 B
+  pid=245319 comm=curl             events=10       tx=187 B rx=567 B
+  pid=245312 comm=mosquitto_pub    events=8        tx=36 B rx=4 B
+  pid=245297 comm=mosquitto_pub    events=8        tx=36 B rx=4 B
+  pid=245327 comm=mosquitto_pub    events=8        tx=36 B rx=4 B
+  pid=245310 comm=redis-cli        events=7        tx=38 B rx=83 B
+  pid=245304 comm=curl             events=7        tx=183 B rx=534 B
+  pid=245289 comm=curl             events=7        tx=183 B rx=534 B
+  pid=245309 comm=redis-cli        events=4        tx=58 B rx=5 B
+  pid=245294 comm=redis-cli        events=4        tx=58 B rx=5 B
+  pid=245308 comm=sqlite3          events=4        tx=0 B rx=0 B
+  pid=245311 comm=redis-cli        events=4        tx=33 B rx=4 B
+  pid=245323 comm=sqlite3          events=4        tx=0 B rx=0 B
+  pid=245325 comm=redis-cli        events=4        tx=33 B rx=25 B
+  pid=245293 comm=sqlite3          events=4        tx=0 B rx=0 B
+  pid=245296 comm=redis-cli        events=4        tx=33 B rx=4 B
+
+top peers:
+  104.16.124.96:443                        events=50       tx=3.7 KiB rx=10.6 KiB
+  104.16.123.96:443                        events=26       tx=1.9 KiB rx=5.3 KiB
+  8.8.8.8:53                               events=36       tx=783 B rx=1.9 KiB
+  34.107.221.82:80                         events=9        tx=297 B rx=648 B
+  127.0.0.1:5683                           events=6        tx=87 B rx=477 B
+  127.0.0.1:6379                           events=27       tx=372 B rx=102 B
+  127.0.0.1:36374                          events=1        tx=159 B rx=0 B
+  127.0.0.1:36836                          events=1        tx=159 B rx=0 B
+  127.0.0.1:52243                          events=1        tx=159 B rx=0 B
+  127.0.0.1:1883                           events=21       tx=108 B rx=12 B
+  127.0.0.1:54392                          events=3        tx=5 B rx=58 B
+  127.0.0.1:54374                          events=3        tx=5 B rx=58 B
+  127.0.0.1:54422                          events=3        tx=5 B rx=58 B
+  127.0.0.1:54384                          events=3        tx=25 B rx=33 B
+  127.0.0.1:54432                          events=3        tx=25 B rx=33 B
+  127.0.0.1:54408                          events=3        tx=25 B rx=33 B
+  10.243.255.255:137                       events=1        tx=50 B rx=0 B
+  127.0.0.1:39892                          events=10       tx=4 B rx=36 B
+  127.0.0.1:39896                          events=10       tx=4 B rx=36 B
+  127.0.0.1:39884                          events=10       tx=4 B rx=36 B

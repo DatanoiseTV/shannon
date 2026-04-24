@@ -1,0 +1,12 @@
+23:09:39.795  dns →  dns id=29528 ? A example.com
+23:09:39.795  dns ←  dns id=29528 rcode=NOERROR  example.com -> 104.20.23.154
+23:09:39.795  dns →  dns id=28618 ? A www.iana.org
+23:09:39.795  dns ←  dns id=28618 rcode=NOERROR  www.iana.org -> ianawww.vip.icann.org
+23:09:39.795  dns →  dns id=237 ? A detectportal.firefox.com
+23:09:39.795  dns →  dns id=30184 ? AAAA detectportal.firefox.com
+23:09:39.795  dns ←  dns id=237 rcode=NOERROR  detectportal.firefox.com -> detectportal.prod.mozaws.net
+23:09:39.795  dns ←  dns id=30184 rcode=NOERROR  detectportal.firefox.com -> detectportal.prod.mozaws.net
+23:09:39.795  dns →  dns id=7713 ? A www.cloudflare.com
+23:09:39.795  dns →  dns id=29731 ? AAAA www.cloudflare.com
+23:09:39.795  dns ←  dns id=7713 rcode=NOERROR  www.cloudflare.com -> 104.16.124.96
+23:09:39.795  dns ←  dns id=29731 rcode=NOERROR  www.cloudflare.com -> 2606:4700::6810:7c60
