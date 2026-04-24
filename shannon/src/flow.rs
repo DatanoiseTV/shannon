@@ -27,6 +27,7 @@ use crate::parsers::{
     http2::{Http2Parser, Http2ParserOutput, Http2Record},
     imap::{ImapParser, ImapParserOutput, ImapRecord},
     kafka::{KafkaParser, KafkaParserOutput, KafkaRecord},
+    modbus::{ModbusParser, ModbusParserOutput, ModbusRecord},
     memcached::{McParserOutput, McRecord, MemcachedParser},
     mongodb::{MongoParser, MongoParserOutput, MongoRecord},
     mqtt::{MqttParser, MqttParserOutput, MqttRecord},
@@ -66,6 +67,7 @@ pub enum Protocol {
     Pop3,
     Smtp,
     Imap,
+    Modbus,
     Bypass,
 }
 
@@ -88,6 +90,7 @@ impl Protocol {
             Self::Pop3 => "pop3",
             Self::Smtp => "smtp",
             Self::Imap => "imap",
+            Self::Modbus => "modbus",
             Self::Bypass => "-",
         }
     }
@@ -109,6 +112,7 @@ pub enum AnyRecord {
     Pop3(Box<Pop3Record>),
     Smtp(Box<SmtpRecord>),
     Imap(Box<ImapRecord>),
+    Modbus(Box<ModbusRecord>),
 }
 
 impl AnyRecord {
@@ -129,6 +133,7 @@ impl AnyRecord {
             Self::Pop3(_) => "pop3",
             Self::Smtp(_) => "smtp",
             Self::Imap(_) => "imap",
+            Self::Modbus(_) => "modbus",
         }
     }
 
@@ -149,6 +154,7 @@ impl AnyRecord {
             Self::Pop3(r) => r.display_line(),
             Self::Smtp(r) => r.display_line(),
             Self::Imap(r) => r.display_line(),
+            Self::Modbus(r) => r.display_line(),
         }
     }
 }
@@ -224,6 +230,7 @@ struct ParserSlot {
     pop3: Option<Pop3Parser>,
     smtp: Option<SmtpParser>,
     imap: Option<ImapParser>,
+    modbus: Option<ModbusParser>,
 }
 
 #[derive(Default)]
@@ -292,6 +299,7 @@ impl FlowTable {
             Protocol::Pop3 => drive_pop3(state, dir),
             Protocol::Smtp => drive_smtp(state, dir),
             Protocol::Imap => drive_imap(state, dir),
+            Protocol::Modbus => drive_modbus(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -316,6 +324,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         110 | 995 => return Protocol::Pop3,
         25 | 465 | 587 | 2525 => return Protocol::Smtp,
         143 | 993 => return Protocol::Imap,
+        502 => return Protocol::Modbus,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -754,6 +763,29 @@ fn drive_imap(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Imap(Box::new(record)));
             }
             ImapParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_modbus(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.modbus),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.modbus),
+    };
+    let parser = slot.get_or_insert_with(ModbusParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            ModbusParserOutput::Need => break,
+            ModbusParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Modbus(Box::new(record)));
+            }
+            ModbusParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
