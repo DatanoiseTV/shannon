@@ -20,6 +20,7 @@ pub mod http1;
 pub mod http2;
 pub mod imap;
 pub mod kafka;
+pub mod ldap;
 pub mod memcached;
 pub mod modbus;
 pub mod mongodb;

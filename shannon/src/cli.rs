@@ -479,6 +479,12 @@ pub struct AskArgs {
     /// Bearer token for non-local providers (OpenAI, Azure).
     #[arg(long, env = "SHANNON_ASK_API_KEY")]
     pub api_key: Option<String>,
+
+    /// Start an interactive REPL; the positional `question` is ignored
+    /// and each line typed at the `shannon>` prompt is sent as a new
+    /// turn. Conversation history carries across turns.
+    #[arg(long, short = 'i')]
+    pub interactive: bool,
 }
 
 #[derive(Args, Clone, Debug)]

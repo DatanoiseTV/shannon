@@ -66,12 +66,13 @@ pub fn run(_cli: &Cli, args: AskArgs) -> Result<()> {
     let state = AskState::new(catalog, args.events.clone());
     let tools = AskState::available_tools();
 
-    let mut messages = vec![
-        ChatMessage::system(SYSTEM_PROMPT),
-        ChatMessage::user(args.question.clone()),
-    ];
+    let mut messages = vec![ChatMessage::system(SYSTEM_PROMPT)];
 
     eprintln!("shannon: asking {} via {endpoint}", model);
+    if args.interactive {
+        return interactive_loop(&client, &state, &tools, &mut messages);
+    }
+    messages.push(ChatMessage::user(args.question.clone()));
     for round in 0..MAX_TOOL_ROUNDS {
         let reply = client.chat(&messages, &tools)?;
         if !reply.tool_calls.is_empty() {
@@ -103,4 +104,62 @@ pub fn run(_cli: &Cli, args: AskArgs) -> Result<()> {
         return Ok(());
     }
     anyhow::bail!("hit the tool-use round limit ({MAX_TOOL_ROUNDS}); the model kept calling tools without concluding")
+}
+
+/// Multi-turn REPL. Read a user line from stdin, run the same tool-use
+/// loop, echo the answer, repeat. Empty line or Ctrl-D quits.
+fn interactive_loop(
+    client: &LlmClient,
+    state: &AskState,
+    tools: &[crate::llm_client::ToolSpec],
+    messages: &mut Vec<ChatMessage>,
+) -> Result<()> {
+    use std::io::{BufRead, Write as IoWrite};
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout().lock();
+    loop {
+        write!(stdout, "\nshannon> ")?;
+        stdout.flush()?;
+        let mut line = String::new();
+        if stdin.lock().read_line(&mut line)? == 0 {
+            writeln!(stdout)?;
+            return Ok(());
+        }
+        let q = line.trim();
+        if q.is_empty() {
+            return Ok(());
+        }
+        messages.push(ChatMessage::user(q.to_string()));
+        let answered = run_one_turn(client, state, tools, messages)?;
+        writeln!(stdout, "{answered}")?;
+    }
+}
+
+fn run_one_turn(
+    client: &LlmClient,
+    state: &AskState,
+    tools: &[crate::llm_client::ToolSpec],
+    messages: &mut Vec<ChatMessage>,
+) -> Result<String> {
+    for _ in 0..MAX_TOOL_ROUNDS {
+        let reply = client.chat(messages, tools)?;
+        if !reply.tool_calls.is_empty() {
+            messages.push(ChatMessage {
+                role: "assistant".into(),
+                content: reply.content.clone(),
+                name: None,
+                tool_calls: reply.tool_calls.clone(),
+                tool_call_id: None,
+            });
+            for call in &reply.tool_calls {
+                let result = dispatch(state, call).unwrap_or_else(|e| format!("error: {e}"));
+                messages.push(ChatMessage::tool(call.id.clone(), result));
+            }
+            continue;
+        }
+        let text = reply.content.unwrap_or_default();
+        messages.push(ChatMessage::assistant_text(text.clone()));
+        return Ok(text);
+    }
+    Ok("(tool-use round limit reached)".into())
 }

@@ -27,6 +27,7 @@ use crate::parsers::{
     http2::{Http2Parser, Http2ParserOutput, Http2Record},
     imap::{ImapParser, ImapParserOutput, ImapRecord},
     kafka::{KafkaParser, KafkaParserOutput, KafkaRecord},
+    ldap::{LdapParser, LdapParserOutput, LdapRecord},
     modbus::{ModbusParser, ModbusParserOutput, ModbusRecord},
     memcached::{McParserOutput, McRecord, MemcachedParser},
     mongodb::{MongoParser, MongoParserOutput, MongoRecord},
@@ -68,6 +69,7 @@ pub enum Protocol {
     Smtp,
     Imap,
     Modbus,
+    Ldap,
     Bypass,
 }
 
@@ -91,6 +93,7 @@ impl Protocol {
             Self::Smtp => "smtp",
             Self::Imap => "imap",
             Self::Modbus => "modbus",
+            Self::Ldap => "ldap",
             Self::Bypass => "-",
         }
     }
@@ -113,6 +116,7 @@ pub enum AnyRecord {
     Smtp(Box<SmtpRecord>),
     Imap(Box<ImapRecord>),
     Modbus(Box<ModbusRecord>),
+    Ldap(Box<LdapRecord>),
 }
 
 impl AnyRecord {
@@ -134,6 +138,7 @@ impl AnyRecord {
             Self::Smtp(_) => "smtp",
             Self::Imap(_) => "imap",
             Self::Modbus(_) => "modbus",
+            Self::Ldap(_) => "ldap",
         }
     }
 
@@ -155,6 +160,7 @@ impl AnyRecord {
             Self::Smtp(r) => r.display_line(),
             Self::Imap(r) => r.display_line(),
             Self::Modbus(r) => r.display_line(),
+            Self::Ldap(r) => r.display_line(),
         }
     }
 }
@@ -231,6 +237,7 @@ struct ParserSlot {
     smtp: Option<SmtpParser>,
     imap: Option<ImapParser>,
     modbus: Option<ModbusParser>,
+    ldap: Option<LdapParser>,
 }
 
 #[derive(Default)]
@@ -300,6 +307,7 @@ impl FlowTable {
             Protocol::Smtp => drive_smtp(state, dir),
             Protocol::Imap => drive_imap(state, dir),
             Protocol::Modbus => drive_modbus(state, dir),
+            Protocol::Ldap => drive_ldap(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -325,6 +333,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         25 | 465 | 587 | 2525 => return Protocol::Smtp,
         143 | 993 => return Protocol::Imap,
         502 => return Protocol::Modbus,
+        389 | 636 | 3268 | 3269 => return Protocol::Ldap,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -786,6 +795,29 @@ fn drive_modbus(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Modbus(Box::new(record)));
             }
             ModbusParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_ldap(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.ldap),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.ldap),
+    };
+    let parser = slot.get_or_insert_with(LdapParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            LdapParserOutput::Need => break,
+            LdapParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Ldap(Box::new(record)));
+            }
+            LdapParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
