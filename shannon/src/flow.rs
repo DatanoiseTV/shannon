@@ -48,6 +48,7 @@ use crate::parsers::{
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
     ssh::{SshParser, SshParserOutput, SshRecord},
     stun::{StunParser, StunParserOutput, StunRecord},
+    tls::{TlsParser, TlsParserOutput, TlsRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
 };
 
@@ -90,6 +91,7 @@ pub enum Protocol {
     Stun,
     Ftp,
     Sip,
+    Tls,
     Bypass,
 }
 
@@ -124,6 +126,7 @@ impl Protocol {
             Self::Stun => "stun",
             Self::Ftp => "ftp",
             Self::Sip => "sip",
+            Self::Tls => "tls",
             Self::Bypass => "-",
         }
     }
@@ -157,6 +160,7 @@ pub enum AnyRecord {
     Stun(Box<StunRecord>),
     Ftp(Box<FtpRecord>),
     Sip(Box<SipRecord>),
+    Tls(Box<TlsRecord>),
 }
 
 impl AnyRecord {
@@ -189,6 +193,7 @@ impl AnyRecord {
             Self::Stun(_) => "stun",
             Self::Ftp(_) => "ftp",
             Self::Sip(_) => "sip",
+            Self::Tls(_) => "tls",
         }
     }
 
@@ -221,6 +226,7 @@ impl AnyRecord {
             Self::Stun(r) => r.display_line(),
             Self::Ftp(r) => r.display_line(),
             Self::Sip(r) => r.display_line(),
+            Self::Tls(r) => r.display_line(),
         }
     }
 }
@@ -308,6 +314,7 @@ struct ParserSlot {
     stun: Option<StunParser>,
     ftp: Option<FtpParser>,
     sip: Option<SipParser>,
+    tls: Option<TlsParser>,
 }
 
 #[derive(Default)]
@@ -388,6 +395,7 @@ impl FlowTable {
             Protocol::Stun => drive_stun(state, dir),
             Protocol::Ftp => drive_ftp(state, dir),
             Protocol::Sip => drive_sip(state, dir),
+            Protocol::Tls => drive_tls(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -424,6 +432,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         3478 | 5349 => return Protocol::Stun,
         21 => return Protocol::Ftp,
         5060 | 5061 => return Protocol::Sip,
+        443 | 8443 => return Protocol::Tls,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -437,6 +446,15 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
 fn signature(buf: &[u8]) -> Option<Protocol> {
     if buf.len() < 4 {
         return None;
+    }
+    // TLS handshake record: 0x16 (type=Handshake) + 0x03 0x0[0..=4] version.
+    if buf.len() >= 5
+        && buf[0] == 0x16
+        && buf[1] == 0x03
+        && buf[2] <= 0x04
+        && (buf[3] != 0 || buf[4] != 0)
+    {
+        return Some(Protocol::Tls);
     }
     if buf.len() >= 24 && buf.starts_with(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
         return Some(Protocol::Http2);
@@ -1138,6 +1156,29 @@ fn drive_sip(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Sip(Box::new(record)));
             }
             SipParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_tls(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.tls),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.tls),
+    };
+    let parser = slot.get_or_insert_with(TlsParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            TlsParserOutput::Need => break,
+            TlsParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Tls(Box::new(record)));
+            }
+            TlsParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
