@@ -91,7 +91,20 @@ pub enum SecretKind {
     MailgunApiKey,
     OpenAiApiKey,
     AnthropicApiKey,
+    /// Anthropic OAuth access token issued by the
+    /// `sk-ant-oat01-…` flow. Used by Claude Code subscription
+    /// sign-in and any other OAuth-driven consumer of the
+    /// Anthropic API.
+    AnthropicOauthToken,
+    /// Anthropic Admin key (`sk-ant-admin01-…`) — workspace /
+    /// org-management privileges; high-sev if leaked.
+    AnthropicAdminKey,
     HuggingFaceToken,
+    GoogleAiApiKey,
+    GroqApiKey,
+    PerplexityApiKey,
+    XaiApiKey,
+    ReplicateApiToken,
     NpmToken,
     JwtBearer,
     PrivateKeyPem,
@@ -140,7 +153,14 @@ impl SecretKind {
             Self::MailgunApiKey => "mailgun_api_key",
             Self::OpenAiApiKey => "openai_api_key",
             Self::AnthropicApiKey => "anthropic_api_key",
+            Self::AnthropicOauthToken => "anthropic_oauth_token",
+            Self::AnthropicAdminKey => "anthropic_admin_key",
             Self::HuggingFaceToken => "huggingface_token",
+            Self::GoogleAiApiKey => "google_ai_api_key",
+            Self::GroqApiKey => "groq_api_key",
+            Self::PerplexityApiKey => "perplexity_api_key",
+            Self::XaiApiKey => "xai_api_key",
+            Self::ReplicateApiToken => "replicate_api_token",
             Self::NpmToken => "npm_token",
             Self::JwtBearer => "jwt_bearer",
             Self::PrivateKeyPem => "private_key_pem",
@@ -169,7 +189,14 @@ impl SecretKind {
             | Self::SlackToken
             | Self::StripeLiveSecret
             | Self::AnthropicApiKey
+            | Self::AnthropicOauthToken
+            | Self::AnthropicAdminKey
             | Self::OpenAiApiKey
+            | Self::GoogleAiApiKey
+            | Self::GroqApiKey
+            | Self::PerplexityApiKey
+            | Self::XaiApiKey
+            | Self::ReplicateApiToken
             | Self::PrivateKeyPem
             | Self::SshPrivateKey
             | Self::NpmToken => Severity::High,
@@ -314,6 +341,20 @@ const RULES: &[Rule] = &[
         capture_group: 0,
     },
     // -- LLM providers ----------------------------------------------------
+    // Order: more-specific Anthropic prefixes before the generic API
+    // pattern so they win the match.
+    Rule {
+        kind: SecretKind::AnthropicAdminKey,
+        pattern: r"\bsk-ant-admin01-[A-Za-z0-9_-]{60,}\b",
+        capture_group: 0,
+    },
+    Rule {
+        kind: SecretKind::AnthropicOauthToken,
+        // Claude Code's subscription sign-in produces this format;
+        // also any other OAuth-driven Anthropic API consumer.
+        pattern: r"\bsk-ant-oat01-[A-Za-z0-9_-]{60,}\b",
+        capture_group: 0,
+    },
     Rule {
         kind: SecretKind::AnthropicApiKey,
         pattern: r"\bsk-ant-api03-[A-Za-z0-9_-]{90,}\b",
@@ -328,6 +369,39 @@ const RULES: &[Rule] = &[
     Rule {
         kind: SecretKind::HuggingFaceToken,
         pattern: r"\bhf_[A-Za-z0-9]{30,}\b",
+        capture_group: 0,
+    },
+    // Google AI Studio (Gemini API keys) — fixed prefix `AIza` + 35 chars
+    // of base64-url alphabet. Same shape as legacy Google API keys; the
+    // distinction is contextual (use of generativelanguage.googleapis.com),
+    // which we don't try to enforce here. Either way a leak is high-sev.
+    Rule {
+        kind: SecretKind::GoogleAiApiKey,
+        pattern: r"\bAIza[A-Za-z0-9_-]{35}\b",
+        capture_group: 0,
+    },
+    // Groq Cloud — `gsk_` + 52 alphanumeric.
+    Rule {
+        kind: SecretKind::GroqApiKey,
+        pattern: r"\bgsk_[A-Za-z0-9]{52}\b",
+        capture_group: 0,
+    },
+    // Perplexity AI — `pplx-` + 48 alphanumeric/underscore.
+    Rule {
+        kind: SecretKind::PerplexityApiKey,
+        pattern: r"\bpplx-[A-Za-z0-9_]{40,}\b",
+        capture_group: 0,
+    },
+    // xAI (Grok) — `xai-` + 80 alphanumeric.
+    Rule {
+        kind: SecretKind::XaiApiKey,
+        pattern: r"\bxai-[A-Za-z0-9]{80}\b",
+        capture_group: 0,
+    },
+    // Replicate — `r8_` + 37 alphanumeric.
+    Rule {
+        kind: SecretKind::ReplicateApiToken,
+        pattern: r"\br8_[A-Za-z0-9]{37}\b",
         capture_group: 0,
     },
     // -- AWS secret access key (contextual) ------------------------------
@@ -858,6 +932,47 @@ mod tests {
             .iter()
             .any(|x| x.kind == SecretKind::HuggingFaceToken));
         assert!(scan(npm).iter().any(|x| x.kind == SecretKind::NpmToken));
+    }
+
+    #[test]
+    fn ai_provider_keys() {
+        // Built via fx() so the source never holds a complete vendor
+        // signature that GitHub's push-protection scanner would flag.
+        // 35-char suffix exactly so the `\b` after `{35}` matches
+        // (Google's AIza-prefixed keys are always 39 chars total).
+        let google = fx(&[b"AI", b"za", b"abcdefghijklmnopqrstuvwxyz012345678"]);
+        let groq = fx(&[b"gs", b"k_", &[b'a'; 52]]);
+        let pplx = fx(&[b"pp", b"lx-", &[b'a'; 48]]);
+        let xai = fx(&[b"xa", b"i-", &[b'a'; 80]]);
+        let r8 = fx(&[b"r8", b"_", &[b'a'; 37]]);
+
+        let kinds_of = |b: &[u8]| -> Vec<SecretKind> {
+            scan(b).into_iter().map(|f| f.kind).collect()
+        };
+        assert!(kinds_of(&google).contains(&SecretKind::GoogleAiApiKey));
+        assert!(kinds_of(&groq).contains(&SecretKind::GroqApiKey));
+        assert!(kinds_of(&pplx).contains(&SecretKind::PerplexityApiKey));
+        assert!(kinds_of(&xai).contains(&SecretKind::XaiApiKey));
+        assert!(kinds_of(&r8).contains(&SecretKind::ReplicateApiToken));
+    }
+
+    #[test]
+    fn anthropic_oauth_and_admin() {
+        // Same fx() pattern. The `sk-ant-oat01-` prefix is what Claude
+        // Code's subscription sign-in produces; admin01 is for
+        // workspace / org-management keys.
+        let oat = fx(&[b"sk-", b"ant-oat01-", &[b'a'; 70]]);
+        let admin = fx(&[b"sk-", b"ant-admin01-", &[b'a'; 70]]);
+        let api = fx(&[b"sk-", b"ant-api03-", &[b'a'; 95]]);
+        let kinds = |b: &[u8]| -> Vec<SecretKind> {
+            scan(b).into_iter().map(|f| f.kind).collect()
+        };
+        assert!(kinds(&oat).contains(&SecretKind::AnthropicOauthToken));
+        // OAuth must not also be matched as the API03 catalogue.
+        assert!(!kinds(&oat).contains(&SecretKind::AnthropicApiKey));
+        assert!(kinds(&admin).contains(&SecretKind::AnthropicAdminKey));
+        assert!(!kinds(&admin).contains(&SecretKind::AnthropicApiKey));
+        assert!(kinds(&api).contains(&SecretKind::AnthropicApiKey));
     }
 
     #[test]

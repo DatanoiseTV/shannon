@@ -106,9 +106,17 @@ fn detect_endpoint(path: &str, host: &str) -> Option<(Provider, Endpoint)> {
     // Strip query string for path classification.
     let p = p.split('?').next().unwrap_or(p);
 
-    // Anthropic Messages API.
-    if host.contains("anthropic.com") || p.ends_with("/v1/messages") {
-        if p.ends_with("/v1/messages") {
+    // Anthropic Messages API. Catches both raw API consumers
+    // (Anthropic SDK, Claude Code subscription mode) and the
+    // `count_tokens` companion endpoint Claude Code uses for inline
+    // cost estimates. `host` carries `api.anthropic.com` for the
+    // production API; OAuth-flow endpoints on `console.anthropic.com`
+    // are auth-side only and not classified as inference here.
+    if host.contains("anthropic.com")
+        || p.ends_with("/v1/messages")
+        || p.ends_with("/v1/messages/count_tokens")
+    {
+        if p.ends_with("/v1/messages") || p.ends_with("/v1/messages/count_tokens") {
             return Some((Provider::Anthropic, Endpoint::Chat));
         }
     }
@@ -314,6 +322,22 @@ mod tests {
         let c = classify_http_request("POST", "/v1/messages", Some("api.anthropic.com"), body)
             .expect("classified");
         assert_eq!(c.provider, Provider::Anthropic);
+    }
+
+    #[test]
+    fn detects_anthropic_count_tokens() {
+        // Claude Code calls this for inline cost / context estimates.
+        // Same provider, same Chat endpoint classification.
+        let body = b"{\"model\":\"claude-opus-4-7\",\"messages\":[]}";
+        let c = classify_http_request(
+            "POST",
+            "/v1/messages/count_tokens",
+            Some("api.anthropic.com"),
+            body,
+        )
+        .expect("classified");
+        assert_eq!(c.provider, Provider::Anthropic);
+        assert_eq!(c.endpoint, Endpoint::Chat);
     }
 
     #[test]
