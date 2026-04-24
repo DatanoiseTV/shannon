@@ -17,6 +17,7 @@
 pub mod cassandra;
 pub mod dnp3;
 pub mod dns;
+pub mod enip;
 pub mod http1;
 pub mod http2;
 pub mod iec104;
