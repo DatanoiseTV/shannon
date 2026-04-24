@@ -1,5 +1,6 @@
 # Rust
-/target
+target/
+**/target/
 **/*.rs.bk
 Cargo.lock.bak
 
@@ -16,7 +17,7 @@ perf.data.old
 flamegraph.svg
 callgrind.out.*
 
-# Build artifacts
+# Build artefacts
 *.o
 *.a
 *.so

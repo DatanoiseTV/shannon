@@ -5,6 +5,7 @@ target = "bpfel-unknown-none"
 build-std = ["core"]
 
 [target.bpfel-unknown-none]
+linker = "bpf-linker"
 rustflags = [
     "-C", "debuginfo=2",
     "-C", "link-arg=--btf",

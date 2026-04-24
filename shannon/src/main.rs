@@ -12,7 +12,9 @@ mod cli;
 mod commands;
 mod config;
 mod doctor;
+mod events;
 mod logging;
+mod runtime;
 
 use std::process::ExitCode;
 
@@ -39,7 +41,12 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            tracing::error!(error = %err, "shannon exited with error");
+            // Print the full cause chain — `{:#}` on `anyhow::Error` walks it.
+            eprintln!("shannon: error: {err:#}");
+            for (i, cause) in err.chain().enumerate().skip(1) {
+                eprintln!("  caused by ({i}): {cause}");
+            }
+            tracing::debug!(error = ?err, "error detail");
             let code = err.downcast_ref::<AppError>().map_or(1u8, AppError::exit_code);
             ExitCode::from(code)
         }
