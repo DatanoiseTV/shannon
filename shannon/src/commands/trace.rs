@@ -17,6 +17,7 @@ use anyhow::Result;
 use tokio::signal;
 
 use crate::cli::{Cli, TraceArgs};
+use crate::dns_cache::DnsCache;
 use crate::events::{DecodedEvent, Direction};
 use crate::flow::{FlowKey, FlowTable};
 use crate::parsers::ParsedRecord;
@@ -36,6 +37,7 @@ async fn run_async(args: TraceArgs) -> Result<()> {
     let mut out = std::io::stdout().lock();
     let color = std::io::stdout().is_terminal();
     let mut flows = FlowTable::default();
+    let dns = DnsCache::new();
 
     if !filter.pids.is_empty() {
         eprintln!(
@@ -50,7 +52,7 @@ async fn run_async(args: TraceArgs) -> Result<()> {
         tokio::select! {
             _ = signal::ctrl_c() => break,
             maybe = runtime.events_rx.recv() => match maybe {
-                Some(ev) => handle_event(&mut out, &mut flows, &ev, color)?,
+                Some(ev) => handle_event(&mut out, &mut flows, &dns, &ev, color)?,
                 None => break,
             }
         }
@@ -61,10 +63,11 @@ async fn run_async(args: TraceArgs) -> Result<()> {
 fn handle_event(
     out: &mut impl Write,
     flows: &mut FlowTable,
+    dns: &DnsCache,
     ev: &DecodedEvent,
     color: bool,
 ) -> std::io::Result<()> {
-    render_event(out, ev, color)?;
+    render_event(out, dns, ev, color)?;
 
     // Feed data events into the per-flow parser and emit any records
     // that fall out. End events clean up flow state.
@@ -123,18 +126,21 @@ fn render_record(
     }
 }
 
-fn render_event(out: &mut impl Write, ev: &DecodedEvent, _color: bool) -> std::io::Result<()> {
+fn render_event(
+    out: &mut impl Write,
+    dns: &DnsCache,
+    ev: &DecodedEvent,
+    _color: bool,
+) -> std::io::Result<()> {
     match ev {
         DecodedEvent::ConnStart(ctx, c) => writeln!(
             out,
-            "{}  CONN   pid={} comm={:<15}  {}:{} -> {}:{}",
+            "{}  CONN   pid={} comm={:<15}  {} -> {}",
             wall_clock(),
             ctx.tgid,
             truncate(&ctx.comm, 15),
-            fmt_ip(&c.src.0),
-            c.src.1,
-            fmt_ip(&c.dst.0),
-            c.dst.1,
+            fmt_endpoint(dns, &c.src.0, c.src.1),
+            fmt_endpoint(dns, &c.dst.0, c.dst.1),
         ),
         DecodedEvent::ConnEnd(ctx, c) => writeln!(
             out,
@@ -149,16 +155,14 @@ fn render_event(out: &mut impl Write, ev: &DecodedEvent, _color: bool) -> std::i
         ),
         DecodedEvent::TcpData(ctx, d) => writeln!(
             out,
-            "{}  TCP{}  pid={} comm={:<15}  {}:{} {} {}:{}  {} B{}",
+            "{}  TCP{}  pid={} comm={:<15}  {} {} {}  {} B{}",
             wall_clock(),
             arrow(d.direction),
             ctx.tgid,
             truncate(&ctx.comm, 15),
-            fmt_ip(&d.src.0),
-            d.src.1,
+            fmt_endpoint(dns, &d.src.0, d.src.1),
             dir_arrow(d.direction),
-            fmt_ip(&d.dst.0),
-            d.dst.1,
+            fmt_endpoint(dns, &d.dst.0, d.dst.1),
             d.total_bytes,
             preview(&d.data),
         ),
@@ -175,17 +179,25 @@ fn render_event(out: &mut impl Write, ev: &DecodedEvent, _color: bool) -> std::i
         ),
         DecodedEvent::Dns(ctx, d) => writeln!(
             out,
-            "{}  DNS{}  pid={} comm={:<15}  {}:{} {} {}:{}",
+            "{}  DNS{}  pid={} comm={:<15}  {} {} {}",
             wall_clock(),
             arrow(d.direction),
             ctx.tgid,
             truncate(&ctx.comm, 15),
-            fmt_ip(&d.src.0),
-            d.src.1,
+            fmt_endpoint(dns, &d.src.0, d.src.1),
             dir_arrow(d.direction),
-            fmt_ip(&d.dst.0),
-            d.dst.1,
+            fmt_endpoint(dns, &d.dst.0, d.dst.1),
         ),
+    }
+}
+
+fn fmt_endpoint(dns: &DnsCache, ip: &IpAddr, port: u16) -> String {
+    let base = fmt_ip(ip);
+    match dns.lookup(*ip) {
+        Some(name) if !name.is_empty() && name.as_str() != base => {
+            format!("{name}[{base}]:{port}")
+        }
+        _ => format!("{base}:{port}"),
     }
 }
 

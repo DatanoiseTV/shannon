@@ -46,6 +46,7 @@ critical path.
 | WebRTC signalling | SDP recognition inside HTTP/WS bodies; STUN/TURN packet parsing. |
 | Body decompression | Decode `Content-Encoding: gzip|br|deflate|zstd` on the fly so `--dump-files` and `trace` show real payloads, not wire-compressed bytes. |
 | Memory-leak mode | Separate `shannon memleak -p PID` subcommand hooking malloc/free/calloc/realloc via uprobes on libc, tracking unfreed allocations with stack traces. Orthogonal to network observation. |
+| Discovery protocols | mDNS (UDP/5353), SSDP (UDP/1900), DNS-SD, LLMNR (UDP/5355) — passive capture + parse, useful for LAN fingerprinting and ICS/IoT discovery maps. |
 
 ## v0.2 — protocol breadth
 

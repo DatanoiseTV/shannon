@@ -11,6 +11,7 @@
 mod cli;
 mod commands;
 mod config;
+mod dns_cache;
 mod doctor;
 mod events;
 mod flow;
