@@ -35,6 +35,7 @@ pub mod nats;
 pub mod opcua;
 pub mod pop3;
 pub mod postgres;
+pub mod rdp;
 pub mod redis;
 pub mod s7comm;
 pub mod sip;

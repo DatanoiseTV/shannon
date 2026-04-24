@@ -42,6 +42,7 @@ use crate::parsers::{
     opcua::{OpcuaParser, OpcuaParserOutput, OpcuaRecord},
     pop3::{Pop3Parser, Pop3ParserOutput, Pop3Record},
     postgres::{PgParserOutput, PgRecord, PostgresParser},
+    rdp::{RdpParser, RdpParserOutput, RdpRecord},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
     s7comm::{S7Parser, S7ParserOutput, S7Record},
     sip::{SipParser, SipParserOutput, SipRecord},
@@ -92,6 +93,7 @@ pub enum Protocol {
     Ftp,
     Sip,
     Tls,
+    Rdp,
     Bypass,
 }
 
@@ -127,6 +129,7 @@ impl Protocol {
             Self::Ftp => "ftp",
             Self::Sip => "sip",
             Self::Tls => "tls",
+            Self::Rdp => "rdp",
             Self::Bypass => "-",
         }
     }
@@ -161,6 +164,7 @@ pub enum AnyRecord {
     Ftp(Box<FtpRecord>),
     Sip(Box<SipRecord>),
     Tls(Box<TlsRecord>),
+    Rdp(Box<RdpRecord>),
 }
 
 impl AnyRecord {
@@ -194,6 +198,7 @@ impl AnyRecord {
             Self::Ftp(_) => "ftp",
             Self::Sip(_) => "sip",
             Self::Tls(_) => "tls",
+            Self::Rdp(_) => "rdp",
         }
     }
 
@@ -227,6 +232,7 @@ impl AnyRecord {
             Self::Ftp(r) => r.display_line(),
             Self::Sip(r) => r.display_line(),
             Self::Tls(r) => r.display_line(),
+            Self::Rdp(r) => r.display_line(),
         }
     }
 }
@@ -315,6 +321,7 @@ struct ParserSlot {
     ftp: Option<FtpParser>,
     sip: Option<SipParser>,
     tls: Option<TlsParser>,
+    rdp: Option<RdpParser>,
 }
 
 #[derive(Default)]
@@ -396,6 +403,7 @@ impl FlowTable {
             Protocol::Ftp => drive_ftp(state, dir),
             Protocol::Sip => drive_sip(state, dir),
             Protocol::Tls => drive_tls(state, dir),
+            Protocol::Rdp => drive_rdp(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -433,6 +441,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         21 => return Protocol::Ftp,
         5060 | 5061 => return Protocol::Sip,
         443 | 8443 => return Protocol::Tls,
+        3389 => return Protocol::Rdp,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1179,6 +1188,29 @@ fn drive_tls(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Tls(Box::new(record)));
             }
             TlsParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_rdp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.rdp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.rdp),
+    };
+    let parser = slot.get_or_insert_with(RdpParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            RdpParserOutput::Need => break,
+            RdpParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Rdp(Box::new(record)));
+            }
+            RdpParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
