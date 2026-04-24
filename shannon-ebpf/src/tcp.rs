@@ -85,9 +85,15 @@ const CAP: usize = 4096;
 
 #[kprobe]
 pub fn tcp_sendmsg(ctx: ProbeContext) -> u32 {
-    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(msg) = ctx.arg::<u64>(1) else { return 1 };
-    let Some(size) = ctx.arg::<usize>(2) else { return 1 };
+    let Some(sk) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(msg) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
+    let Some(size) = ctx.arg::<usize>(2) else {
+        return 1;
+    };
     let (iov_base, iov_cap) = resolve_iovec(msg).unwrap_or((0, 0));
     if iov_base != 0 {
         let captured = (iov_cap as usize).min(size).min(CAP) as u32;
@@ -98,8 +104,12 @@ pub fn tcp_sendmsg(ctx: ProbeContext) -> u32 {
 
 #[kprobe]
 pub fn tcp_recvmsg(ctx: ProbeContext) -> u32 {
-    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(msg) = ctx.arg::<u64>(1) else { return 1 };
+    let Some(sk) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(msg) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
 
     // Walk the iov_iter now so we capture the buffer address the caller
     // prepared — by kretprobe time the iter has advanced past it.
@@ -109,14 +119,24 @@ pub fn tcp_recvmsg(ctx: ProbeContext) -> u32 {
     }
 
     let pt = bpf_get_current_pid_tgid();
-    let _ = PENDING_RECV.insert(&pt, &PendingRecv { sk, iov_base, iov_cap }, 0);
+    let _ = PENDING_RECV.insert(
+        &pt,
+        &PendingRecv {
+            sk,
+            iov_base,
+            iov_cap,
+        },
+        0,
+    );
     0
 }
 
 #[kretprobe]
 pub fn tcp_recvmsg_ret(ctx: RetProbeContext) -> u32 {
     let pt = bpf_get_current_pid_tgid();
-    let Some(pending) = (unsafe { PENDING_RECV.get(&pt) }).copied() else { return 0 };
+    let Some(pending) = (unsafe { PENDING_RECV.get(&pt) }).copied() else {
+        return 0;
+    };
     let _ = PENDING_RECV.remove(&pt);
 
     // ret < 0 is -errno; 0 is "peer closed". Nothing to capture either way.
@@ -125,7 +145,13 @@ pub fn tcp_recvmsg_ret(ctx: RetProbeContext) -> u32 {
         return 0;
     }
     let captured = (ret as usize).min(pending.iov_cap as usize).min(CAP) as u32;
-    emit_tcp_data_from_buf(pending.sk, pending.iov_base, captured, ret as u32, Direction::Rx);
+    emit_tcp_data_from_buf(
+        pending.sk,
+        pending.iov_base,
+        captured,
+        ret as u32,
+        Direction::Rx,
+    );
     0
 }
 
@@ -135,34 +161,32 @@ pub enum Direction {
     Rx = 1,
 }
 
-fn emit_tcp_data_from_buf(
-    sk: u64,
-    user_buf: u64,
-    captured: u32,
-    total_bytes: u32,
-    dir: Direction,
-) {
+fn emit_tcp_data_from_buf(sk: u64, user_buf: u64, captured: u32, total_bytes: u32, dir: Direction) {
     if util::is_self() || util::filtered_out_by_pid() {
         return;
     }
-    let info = unsafe { SOCKS.get(&sk) }.copied().unwrap_or(crate::maps::SockInfo {
-        sock_id: sk,
-        pid: 0,
-        tgid: 0,
-        sport: 0,
-        dport: 0,
-        family: 0,
-        protocol: 0,
-        _pad: [0; 2],
-        saddr: [0; 16],
-        daddr: [0; 16],
-        bytes_sent: 0,
-        bytes_recv: 0,
-        started_ns: 0,
-        comm: [0; 16],
-    });
+    let info = unsafe { SOCKS.get(&sk) }
+        .copied()
+        .unwrap_or(crate::maps::SockInfo {
+            sock_id: sk,
+            pid: 0,
+            tgid: 0,
+            sport: 0,
+            dport: 0,
+            family: 0,
+            protocol: 0,
+            _pad: [0; 2],
+            saddr: [0; 16],
+            daddr: [0; 16],
+            bytes_sent: 0,
+            bytes_recv: 0,
+            started_ns: 0,
+            comm: [0; 16],
+        });
 
-    let Some(scratch_ptr) = SCRATCH.get_ptr_mut(0) else { return };
+    let Some(scratch_ptr) = SCRATCH.get_ptr_mut(0) else {
+        return;
+    };
     // SAFETY: per-CPU slot, valid for the duration of this program.
     let scratch = unsafe { &mut *scratch_ptr };
 
@@ -184,7 +208,9 @@ fn emit_tcp_data_from_buf(
     // Reserve a full fixed-size slot in the ring; we'll overwrite the
     // unused tail with zeros. Fixed size keeps the verifier happy and the
     // overhead is acceptable at CAP = 4 KiB.
-    let Some(mut entry) = EVENTS.reserve::<Event<TcpDataFrame>>(0) else { return };
+    let Some(mut entry) = EVENTS.reserve::<Event<TcpDataFrame>>(0) else {
+        return;
+    };
     let ev = entry.as_mut_ptr();
     unsafe {
         let mut header = util::fill_header(EventKind::TcpData);

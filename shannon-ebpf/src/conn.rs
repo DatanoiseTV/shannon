@@ -21,10 +21,10 @@ use aya_ebpf::{
     programs::{ProbeContext, TracePointContext},
 };
 
-use shannon_common::{COMM_LEN, ConnEndPayload, ConnStartPayload, EventKind, HEADER_SIZE};
+use shannon_common::{ConnEndPayload, ConnStartPayload, EventKind, COMM_LEN, HEADER_SIZE};
 
 use crate::{
-    maps::{EVENTS, SOCKS, SockInfo},
+    maps::{SockInfo, EVENTS, SOCKS},
     util,
 };
 
@@ -59,14 +59,18 @@ const AF_INET6: u16 = 10;
 
 #[kprobe]
 pub fn tcp_v4_connect(ctx: ProbeContext) -> u32 {
-    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
+    let Some(sk) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
     stash_pid(sk);
     0
 }
 
 #[kprobe]
 pub fn tcp_v6_connect(ctx: ProbeContext) -> u32 {
-    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
+    let Some(sk) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
     stash_pid(sk);
     0
 }

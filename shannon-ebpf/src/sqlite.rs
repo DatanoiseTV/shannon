@@ -23,9 +23,7 @@
 //! arg 0. `nByte == -1` means "NUL-terminated"; we cap reads at
 //! [`SQLITE_TEXT_CAP`] either way.
 
-use aya_ebpf::{
-    helpers::bpf_probe_read_user_buf, macros::uprobe, programs::ProbeContext,
-};
+use aya_ebpf::{helpers::bpf_probe_read_user_buf, macros::uprobe, programs::ProbeContext};
 
 use shannon_common::{EventKind, SqliteHeader, SQLITE_TEXT_CAP};
 
@@ -40,8 +38,12 @@ const API_EXEC: u8 = 2;
 
 #[uprobe]
 pub fn sqlite_prepare_v2(ctx: ProbeContext) -> u32 {
-    let Some(db) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(sql) = ctx.arg::<u64>(1) else { return 1 };
+    let Some(db) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(sql) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
     let nbyte_raw = ctx.arg::<i32>(2).unwrap_or(-1);
     if sql == 0 {
         return 0;
@@ -56,15 +58,23 @@ pub fn sqlite_prepare_v2(ctx: ProbeContext) -> u32 {
     } else {
         nbyte_raw as u32
     };
-    let total = if nbyte_raw < 0 { u32::MAX } else { nbyte_raw as u32 };
+    let total = if nbyte_raw < 0 {
+        u32::MAX
+    } else {
+        nbyte_raw as u32
+    };
     emit(db, sql, want, total, API_PREPARE);
     0
 }
 
 #[uprobe]
 pub fn sqlite_exec(ctx: ProbeContext) -> u32 {
-    let Some(db) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(sql) = ctx.arg::<u64>(1) else { return 1 };
+    let Some(db) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(sql) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
     if sql == 0 {
         return 0;
     }
@@ -89,14 +99,15 @@ fn emit(db: u64, sql_ptr: u64, want: u32, sql_total: u32, api: u8) {
         return;
     }
 
-    let Some(scratch_ptr) = SCRATCH.get_ptr_mut(0) else { return };
-    let scratch = unsafe { &mut *scratch_ptr };
-    let captured_len: u32 = match unsafe {
-        bpf_probe_read_user_buf(sql_ptr as *const u8, &mut scratch.bytes[..n])
-    } {
-        Ok(()) => n as u32,
-        Err(_) => 0,
+    let Some(scratch_ptr) = SCRATCH.get_ptr_mut(0) else {
+        return;
     };
+    let scratch = unsafe { &mut *scratch_ptr };
+    let captured_len: u32 =
+        match unsafe { bpf_probe_read_user_buf(sql_ptr as *const u8, &mut scratch.bytes[..n]) } {
+            Ok(()) => n as u32,
+            Err(_) => 0,
+        };
     if captured_len == 0 {
         return;
     }

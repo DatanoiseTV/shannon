@@ -52,22 +52,41 @@ static PENDING_SSL: HashMap<u64, PendingRead> =
 
 #[uprobe]
 pub fn ssl_write(ctx: ProbeContext) -> u32 {
-    let Some(ssl) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(buf) = ctx.arg::<u64>(1) else { return 1 };
-    let Some(num) = ctx.arg::<i32>(2) else { return 1 };
+    let Some(ssl) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(buf) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
+    let Some(num) = ctx.arg::<i32>(2) else {
+        return 1;
+    };
     if num <= 0 {
         return 0;
     }
-    emit_tls_data(ssl, buf, num as u32, num as u32, Direction::Tx, TlsLib::OpenSsl);
+    emit_tls_data(
+        ssl,
+        buf,
+        num as u32,
+        num as u32,
+        Direction::Tx,
+        TlsLib::OpenSsl,
+    );
     0
 }
 
 // int SSL_write_ex(SSL *s, const void *buf, size_t num, size_t *written)
 #[uprobe]
 pub fn ssl_write_ex(ctx: ProbeContext) -> u32 {
-    let Some(ssl) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(buf) = ctx.arg::<u64>(1) else { return 1 };
-    let Some(num) = ctx.arg::<u64>(2) else { return 1 };
+    let Some(ssl) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(buf) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
+    let Some(num) = ctx.arg::<u64>(2) else {
+        return 1;
+    };
     if num == 0 {
         return 0;
     }
@@ -82,8 +101,12 @@ pub fn ssl_write_ex(ctx: ProbeContext) -> u32 {
 
 #[uprobe]
 pub fn ssl_read(ctx: ProbeContext) -> u32 {
-    let Some(ssl) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(buf) = ctx.arg::<u64>(1) else { return 1 };
+    let Some(ssl) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(buf) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
     let pt = bpf_get_current_pid_tgid();
     let _ = PENDING_SSL.insert(
         &pt,
@@ -107,9 +130,15 @@ pub fn ssl_read_ret(ctx: RetProbeContext) -> u32 {
 // int SSL_read_ex(SSL *s, void *buf, size_t num, size_t *readbytes)
 #[uprobe]
 pub fn ssl_read_ex(ctx: ProbeContext) -> u32 {
-    let Some(ssl) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(buf) = ctx.arg::<u64>(1) else { return 1 };
-    let Some(readbytes_out) = ctx.arg::<u64>(3) else { return 1 };
+    let Some(ssl) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(buf) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
+    let Some(readbytes_out) = ctx.arg::<u64>(3) else {
+        return 1;
+    };
     let pt = bpf_get_current_pid_tgid();
     let _ = PENDING_SSL.insert(
         &pt,
@@ -132,7 +161,9 @@ pub fn ssl_read_ex_ret(ctx: RetProbeContext) -> u32 {
 
 fn finish_read(ctx: &RetProbeContext, via_ex: bool) -> u32 {
     let pt = bpf_get_current_pid_tgid();
-    let Some(pending) = (unsafe { PENDING_SSL.get(&pt) }).copied() else { return 0 };
+    let Some(pending) = (unsafe { PENDING_SSL.get(&pt) }).copied() else {
+        return 0;
+    };
     let _ = PENDING_SSL.remove(&pt);
 
     let ret: i32 = ctx.ret().unwrap_or(-1);
@@ -181,18 +212,13 @@ struct TlsFrame {
 }
 
 #[inline(always)]
-fn emit_tls_data(
-    ssl: u64,
-    buf: u64,
-    captured: u32,
-    total: u32,
-    dir: Direction,
-    lib: TlsLib,
-) {
+fn emit_tls_data(ssl: u64, buf: u64, captured: u32, total: u32, dir: Direction, lib: TlsLib) {
     if util::is_self() || util::filtered_out_by_pid() {
         return;
     }
-    let Some(scratch_ptr) = SCRATCH.get_ptr_mut(0) else { return };
+    let Some(scratch_ptr) = SCRATCH.get_ptr_mut(0) else {
+        return;
+    };
     // SAFETY: per-CPU slot, valid for the duration of this program.
     let scratch = unsafe { &mut *scratch_ptr };
 
@@ -206,10 +232,11 @@ fn emit_tls_data(
         0
     };
 
-    let total_len =
-        size_of::<EventHeader>() + size_of::<TlsDataHeader>() + captured_len as usize;
+    let total_len = size_of::<EventHeader>() + size_of::<TlsDataHeader>() + captured_len as usize;
 
-    let Some(mut entry) = EVENTS.reserve::<TlsFrame>(0) else { return };
+    let Some(mut entry) = EVENTS.reserve::<TlsFrame>(0) else {
+        return;
+    };
     unsafe {
         let ev = entry.as_mut_ptr();
         let mut header = util::fill_header(EventKind::TlsData);

@@ -86,13 +86,13 @@ static PENDING_UDP_RECV: HashMap<u64, PendingUdpRecv> =
 // headers; if a target kernel has a different config the v6 reads
 // return zeros / EFAULT and we skip emission rather than emit
 // garbage. Same approach as the tcp probes.
-const SK_DADDR: usize = 0;       // __be32 IPv4 daddr
-const SK_SADDR: usize = 4;       // __be32 IPv4 saddr
-const SK_DPORT: usize = 12;      // __be16 dport (shared between v4 + v6)
-const SK_SPORT: usize = 14;      // u16    local port (host order)
+const SK_DADDR: usize = 0; // __be32 IPv4 daddr
+const SK_SADDR: usize = 4; // __be32 IPv4 saddr
+const SK_DPORT: usize = 12; // __be16 dport (shared between v4 + v6)
+const SK_SPORT: usize = 14; // u16    local port (host order)
 const SK_FAMILY: usize = 16;
-const SK_V6_DADDR: usize = 56;   // struct in6_addr (16 bytes)
-const SK_V6_SADDR: usize = 72;   // struct in6_addr (16 bytes)
+const SK_V6_DADDR: usize = 56; // struct in6_addr (16 bytes)
+const SK_V6_SADDR: usize = 72; // struct in6_addr (16 bytes)
 
 // struct msghdr
 const MSGHDR_NAME_OFF: usize = 0;
@@ -114,9 +114,15 @@ const CAP: usize = 4096;
 
 #[kprobe]
 pub fn udp_sendmsg(ctx: ProbeContext) -> u32 {
-    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(msg) = ctx.arg::<u64>(1) else { return 1 };
-    let Some(size) = ctx.arg::<usize>(2) else { return 1 };
+    let Some(sk) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(msg) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
+    let Some(size) = ctx.arg::<usize>(2) else {
+        return 1;
+    };
     if util::is_self() || util::filtered_out_by_pid() {
         return 0;
     }
@@ -131,8 +137,12 @@ pub fn udp_sendmsg(ctx: ProbeContext) -> u32 {
 
 #[kprobe]
 pub fn udp_recvmsg(ctx: ProbeContext) -> u32 {
-    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
-    let Some(msg) = ctx.arg::<u64>(1) else { return 1 };
+    let Some(sk) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(msg) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
 
     // Stash the iov_base now — the iter advances by return time.
     // msg_name is *not* populated yet; the kernel writes it as part
@@ -145,7 +155,12 @@ pub fn udp_recvmsg(ctx: ProbeContext) -> u32 {
     let pt = bpf_get_current_pid_tgid();
     let _ = PENDING_UDP_RECV.insert(
         &pt,
-        &PendingUdpRecv { sk, msg, iov_base, iov_cap },
+        &PendingUdpRecv {
+            sk,
+            msg,
+            iov_base,
+            iov_cap,
+        },
         0,
     );
     0
@@ -154,7 +169,9 @@ pub fn udp_recvmsg(ctx: ProbeContext) -> u32 {
 #[kretprobe]
 pub fn udp_recvmsg_ret(ctx: RetProbeContext) -> u32 {
     let pt = bpf_get_current_pid_tgid();
-    let Some(pending) = (unsafe { PENDING_UDP_RECV.get(&pt) }).copied() else { return 0 };
+    let Some(pending) = (unsafe { PENDING_UDP_RECV.get(&pt) }).copied() else {
+        return 0;
+    };
     let _ = PENDING_UDP_RECV.remove(&pt);
 
     let ret: i32 = ctx.ret().unwrap_or(-1);
@@ -193,8 +210,8 @@ fn emit_udp_data(
 ) {
     // Pull dst fields from the sock. Unconnected UDP will have
     // skc_dport == 0, in which case we fall back to msg_name.
-    let family: u16 = unsafe { bpf_probe_read_kernel((sk + SK_FAMILY as u64) as *const u16) }
-        .unwrap_or(0);
+    let family: u16 =
+        unsafe { bpf_probe_read_kernel((sk + SK_FAMILY as u64) as *const u16) }.unwrap_or(0);
     if family != AF_INET && family != AF_INET6 {
         return;
     }
@@ -315,19 +332,16 @@ fn read_msg_name_v4(msg: u64) -> (u16, u32) {
     if name_ptr == 0 || (name_len as usize) < 8 {
         return (0, 0);
     }
-    let sa_family: u16 =
-        unsafe { bpf_probe_read_kernel(name_ptr as *const u16) }.unwrap_or(0);
+    let sa_family: u16 = unsafe { bpf_probe_read_kernel(name_ptr as *const u16) }.unwrap_or(0);
     if sa_family != AF_INET {
         return (0, 0);
     }
-    let port: u16 = unsafe {
-        bpf_probe_read_kernel((name_ptr + SOCKADDR_IN_PORT as u64) as *const u16)
-    }
-    .unwrap_or(0);
-    let addr: u32 = unsafe {
-        bpf_probe_read_kernel((name_ptr + SOCKADDR_IN_ADDR as u64) as *const u32)
-    }
-    .unwrap_or(0);
+    let port: u16 =
+        unsafe { bpf_probe_read_kernel((name_ptr + SOCKADDR_IN_PORT as u64) as *const u16) }
+            .unwrap_or(0);
+    let addr: u32 =
+        unsafe { bpf_probe_read_kernel((name_ptr + SOCKADDR_IN_ADDR as u64) as *const u32) }
+            .unwrap_or(0);
     (port, addr)
 }
 
@@ -341,15 +355,13 @@ fn read_msg_name_v6(msg: u64) -> (u16, Option<[u8; 16]>) {
     if name_ptr == 0 || (name_len as usize) < 24 {
         return (0, None);
     }
-    let sa_family: u16 =
-        unsafe { bpf_probe_read_kernel(name_ptr as *const u16) }.unwrap_or(0);
+    let sa_family: u16 = unsafe { bpf_probe_read_kernel(name_ptr as *const u16) }.unwrap_or(0);
     if sa_family != AF_INET6 {
         return (0, None);
     }
-    let port: u16 = unsafe {
-        bpf_probe_read_kernel((name_ptr + SOCKADDR_IN6_PORT as u64) as *const u16)
-    }
-    .unwrap_or(0);
+    let port: u16 =
+        unsafe { bpf_probe_read_kernel((name_ptr + SOCKADDR_IN6_PORT as u64) as *const u16) }
+            .unwrap_or(0);
     let mut addr = [0u8; 16];
     let r = unsafe {
         bpf_probe_read_kernel_buf(

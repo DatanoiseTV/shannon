@@ -4,7 +4,7 @@ use aya_ebpf::helpers::{
     bpf_get_current_comm, bpf_get_current_pid_tgid, bpf_get_current_uid_gid, bpf_ktime_get_ns,
 };
 
-use shannon_common::{ABI_VERSION, COMM_LEN, EventHeader, EventKind};
+use shannon_common::{EventHeader, EventKind, ABI_VERSION, COMM_LEN};
 
 use crate::maps::{PID_FILTER, SELF_PID};
 
