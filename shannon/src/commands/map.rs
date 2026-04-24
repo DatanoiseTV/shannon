@@ -150,6 +150,7 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::Ntp(_) => ("ntp", None),
         AnyRecord::Radius(_) => ("radius", None),
         AnyRecord::Syslog(_) => ("syslog", None),
+        AnyRecord::Amqp(_) => ("amqp", None),
     }
 }
 

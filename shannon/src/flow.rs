@@ -22,6 +22,7 @@ use std::collections::HashMap;
 
 use crate::events::Direction;
 use crate::parsers::{
+    amqp::{AmqpParser, AmqpParserOutput, AmqpRecord},
     bacnet::{BacnetParser, BacnetParserOutput, BacnetRecord},
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
     dnp3::{Dnp3Parser, Dnp3ParserOutput, Dnp3Record},
@@ -104,6 +105,7 @@ pub enum Protocol {
     Ntp,
     Radius,
     Syslog,
+    Amqp,
     Bypass,
 }
 
@@ -145,6 +147,7 @@ impl Protocol {
             Self::Ntp => "ntp",
             Self::Radius => "radius",
             Self::Syslog => "syslog",
+            Self::Amqp => "amqp",
             Self::Bypass => "-",
         }
     }
@@ -185,6 +188,7 @@ pub enum AnyRecord {
     Ntp(Box<NtpRecord>),
     Radius(Box<RadiusRecord>),
     Syslog(Box<SyslogRecord>),
+    Amqp(Box<AmqpRecord>),
 }
 
 impl AnyRecord {
@@ -224,6 +228,7 @@ impl AnyRecord {
             Self::Ntp(_) => "ntp",
             Self::Radius(_) => "radius",
             Self::Syslog(_) => "syslog",
+            Self::Amqp(_) => "amqp",
         }
     }
 
@@ -263,6 +268,7 @@ impl AnyRecord {
             Self::Ntp(r) => r.display_line(),
             Self::Radius(r) => r.display_line(),
             Self::Syslog(r) => r.display_line(),
+            Self::Amqp(r) => r.display_line(),
         }
     }
 }
@@ -357,6 +363,7 @@ struct ParserSlot {
     ntp: Option<NtpParser>,
     radius: Option<RadiusParser>,
     syslog: Option<SyslogParser>,
+    amqp: Option<AmqpParser>,
 }
 
 #[derive(Default)]
@@ -444,6 +451,7 @@ impl FlowTable {
             Protocol::Ntp => drive_ntp(state, dir),
             Protocol::Radius => drive_radius(state, dir),
             Protocol::Syslog => drive_syslog(state, dir),
+            Protocol::Amqp => drive_amqp(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -487,6 +495,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         123 => return Protocol::Ntp,
         1812 | 1813 => return Protocol::Radius,
         514 | 601 | 6514 => return Protocol::Syslog,
+        5672 | 5671 => return Protocol::Amqp,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1371,6 +1380,29 @@ fn drive_syslog(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Syslog(Box::new(record)));
             }
             SyslogParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_amqp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.amqp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.amqp),
+    };
+    let parser = slot.get_or_insert_with(AmqpParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            AmqpParserOutput::Need => break,
+            AmqpParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Amqp(Box::new(record)));
+            }
+            AmqpParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
