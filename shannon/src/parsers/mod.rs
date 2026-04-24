@@ -18,6 +18,7 @@ pub mod cassandra;
 pub mod dns;
 pub mod http1;
 pub mod http2;
+pub mod iec104;
 pub mod imap;
 pub mod kafka;
 pub mod ldap;
@@ -33,6 +34,7 @@ pub mod postgres;
 pub mod redis;
 pub mod smtp;
 pub mod ssdp;
+pub mod ssh;
 pub mod websocket;
 
 // No re-exports from here — each parser's symbols are accessed via its

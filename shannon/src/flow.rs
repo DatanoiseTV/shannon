@@ -25,6 +25,7 @@ use crate::parsers::{
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
     http1::{Http1Parser, ParsedRecord as Http1Record, ParserOutput as Http1Output},
     http2::{Http2Parser, Http2ParserOutput, Http2Record},
+    iec104::{Iec104Parser, Iec104ParserOutput, Iec104Record},
     imap::{ImapParser, ImapParserOutput, ImapRecord},
     kafka::{KafkaParser, KafkaParserOutput, KafkaRecord},
     ldap::{LdapParser, LdapParserOutput, LdapRecord},
@@ -39,6 +40,7 @@ use crate::parsers::{
     postgres::{PgParserOutput, PgRecord, PostgresParser},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
+    ssh::{SshParser, SshParserOutput, SshRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
 };
 
@@ -72,6 +74,8 @@ pub enum Protocol {
     Modbus,
     Ldap,
     OpcUa,
+    Iec104,
+    Ssh,
     Bypass,
 }
 
@@ -97,6 +101,8 @@ impl Protocol {
             Self::Modbus => "modbus",
             Self::Ldap => "ldap",
             Self::OpcUa => "opcua",
+            Self::Iec104 => "iec104",
+            Self::Ssh => "ssh",
             Self::Bypass => "-",
         }
     }
@@ -121,6 +127,8 @@ pub enum AnyRecord {
     Modbus(Box<ModbusRecord>),
     Ldap(Box<LdapRecord>),
     OpcUa(Box<OpcuaRecord>),
+    Iec104(Box<Iec104Record>),
+    Ssh(Box<SshRecord>),
 }
 
 impl AnyRecord {
@@ -144,6 +152,8 @@ impl AnyRecord {
             Self::Modbus(_) => "modbus",
             Self::Ldap(_) => "ldap",
             Self::OpcUa(_) => "opcua",
+            Self::Iec104(_) => "iec104",
+            Self::Ssh(_) => "ssh",
         }
     }
 
@@ -167,6 +177,8 @@ impl AnyRecord {
             Self::Modbus(r) => r.display_line(),
             Self::Ldap(r) => r.display_line(),
             Self::OpcUa(r) => r.display_line(),
+            Self::Iec104(r) => r.display_line(),
+            Self::Ssh(r) => r.display_line(),
         }
     }
 }
@@ -245,6 +257,8 @@ struct ParserSlot {
     modbus: Option<ModbusParser>,
     ldap: Option<LdapParser>,
     opcua: Option<OpcuaParser>,
+    iec104: Option<Iec104Parser>,
+    ssh: Option<SshParser>,
 }
 
 #[derive(Default)]
@@ -316,6 +330,8 @@ impl FlowTable {
             Protocol::Modbus => drive_modbus(state, dir),
             Protocol::Ldap => drive_ldap(state, dir),
             Protocol::OpcUa => drive_opcua(state, dir),
+            Protocol::Iec104 => drive_iec104(state, dir),
+            Protocol::Ssh => drive_ssh(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -343,6 +359,8 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         502 => return Protocol::Modbus,
         389 | 636 | 3268 | 3269 => return Protocol::Ldap,
         4840 | 4843 => return Protocol::OpcUa,
+        2404 => return Protocol::Iec104,
+        22 => return Protocol::Ssh,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -850,6 +868,52 @@ fn drive_opcua(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::OpcUa(Box::new(record)));
             }
             OpcuaParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_iec104(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.iec104),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.iec104),
+    };
+    let parser = slot.get_or_insert_with(Iec104Parser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            Iec104ParserOutput::Need => break,
+            Iec104ParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Iec104(Box::new(record)));
+            }
+            Iec104ParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_ssh(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.ssh),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.ssh),
+    };
+    let parser = slot.get_or_insert_with(SshParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            SshParserOutput::Need => break,
+            SshParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Ssh(Box::new(record)));
+            }
+            SshParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
