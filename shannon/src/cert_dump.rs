@@ -44,6 +44,42 @@ pub struct CertSummary {
     pub not_after: String,
     pub fingerprint_prefix: String, // first 16 hex chars of SHA-256
     pub saved_path: PathBuf,
+    /// Observable trust / hygiene anomalies — e.g. self-signed, weak
+    /// signature algorithm, short RSA key, long validity. Populated
+    /// inline by the parser; an empty list means "nothing flagged".
+    pub anomalies: Vec<CertAnomaly>,
+}
+
+/// A single anomaly noticed while inspecting a certificate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CertAnomaly {
+    /// Issuer DN equals subject DN — self-signed cert. Expected on
+    /// trust roots, but on a leaf served by a public-facing endpoint
+    /// it's almost always a misconfiguration or a MitM.
+    SelfSigned,
+    /// Signature algorithm uses MD5 or SHA-1; both have been withdrawn
+    /// from the Web PKI.
+    WeakSigAlg(String),
+    /// RSA modulus shorter than the 2048-bit Web PKI floor.
+    ShortRsaKey(u32),
+    /// Validity window opens in the future or has already closed.
+    OutsideValidity,
+    /// Validity window is longer than the 398-day cap the CA/B Forum
+    /// (browsers) enforces — common on internal / private-CA certs
+    /// that would be rejected on the public internet.
+    LongValidity(i64),
+}
+
+impl CertAnomaly {
+    pub fn label(&self) -> String {
+        match self {
+            Self::SelfSigned => "self-signed".into(),
+            Self::WeakSigAlg(alg) => format!("weak sig-alg {alg}"),
+            Self::ShortRsaKey(n) => format!("RSA key {n}b"),
+            Self::OutsideValidity => "outside validity window".into(),
+            Self::LongValidity(d) => format!("validity {d}d (> 398d CA/B)"),
+        }
+    }
 }
 
 impl CertDumper {
@@ -159,6 +195,8 @@ impl CertDumper {
         );
         let _ = File::create(&meta_path).and_then(|mut f| f.write_all(meta.as_bytes()));
 
+        let anomalies = detect_anomalies(&x509);
+
         self.count += 1;
         Some(CertSummary {
             subject_cn,
@@ -168,7 +206,66 @@ impl CertDumper {
             not_after,
             fingerprint_prefix: fp_hex[..16].to_string(),
             saved_path,
+            anomalies,
         })
+    }
+}
+
+fn detect_anomalies(x509: &X509Certificate<'_>) -> Vec<CertAnomaly> {
+    let mut out = Vec::new();
+
+    // Self-signed: full-DN compare, not just CN — a cert with CN
+    // "example.com" but different O/OU is not self-signed.
+    if x509.subject() == x509.issuer() {
+        out.push(CertAnomaly::SelfSigned);
+    }
+
+    // Weak signature algorithm. x509-parser exposes the OID; names
+    // map to the common "md5WithRSAEncryption" / "sha1WithRSAEncryption"
+    // / "ecdsa-with-SHA1" / "dsa-with-SHA1" etc.
+    let sig_alg = x509.signature_algorithm.oid().to_id_string();
+    if let Some(weak) = weak_sig_label(&sig_alg) {
+        out.push(CertAnomaly::WeakSigAlg(weak.to_string()));
+    }
+
+    // Short RSA key. x509-parser's public_key() exposes an `RsaPublicKey`
+    // variant when it can parse one; we inspect the modulus length.
+    if let Ok(spki) = x509.public_key().parsed() {
+        if let public_key::PublicKey::RSA(rsa) = spki {
+            let bits = (rsa.modulus.len().saturating_mul(8)) as u32;
+            if bits > 0 && bits < 2048 {
+                out.push(CertAnomaly::ShortRsaKey(bits));
+            }
+        }
+    }
+
+    // Validity window checks.
+    let nb = x509.validity().not_before.timestamp();
+    let na = x509.validity().not_after.timestamp();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    if now != 0 && (now < nb || now > na) {
+        out.push(CertAnomaly::OutsideValidity);
+    }
+    let days = (na - nb) / 86_400;
+    if days > 398 {
+        out.push(CertAnomaly::LongValidity(days));
+    }
+
+    out
+}
+
+fn weak_sig_label(oid: &str) -> Option<&'static str> {
+    // Matching the common OID dotted IDs; x509-parser's `to_id_string`
+    // returns them in dotted form.
+    match oid {
+        "1.2.840.113549.1.1.4" => Some("md5WithRSAEncryption"),
+        "1.2.840.113549.1.1.5" => Some("sha1WithRSAEncryption"),
+        "1.2.840.10040.4.3" => Some("dsa-with-SHA1"),
+        "1.2.840.10045.4.1" => Some("ecdsa-with-SHA1"),
+        _ => None,
     }
 }
 

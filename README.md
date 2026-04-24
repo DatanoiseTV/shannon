@@ -30,6 +30,10 @@ sudo shannon top --sort p99
 
 # service-map: who talks to whom, by protocol
 sudo shannon map
+
+# trace + dump every X.509 seen on the wire, flag self-signed / weak
+# sig-alg / short RSA / expired / long-validity anomalies inline
+sudo shannon trace --dump-certs /tmp/shannon-certs
 sudo shannon map --format dot | dot -Tsvg > map.svg
 sudo shannon map --format json > edges.ndjson
 

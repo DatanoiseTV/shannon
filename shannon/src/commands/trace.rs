@@ -175,6 +175,15 @@ fn handle_event(
                         summary.fingerprint_prefix,
                         summary.saved_path.display(),
                     )?;
+                    for a in &summary.anomalies {
+                        writeln!(
+                            out,
+                            "{}  ⚠  cert-anomaly  {} ({})",
+                            wall_clock(),
+                            a.label(),
+                            summary.fingerprint_prefix,
+                        )?;
+                    }
                 }
             }
             let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
