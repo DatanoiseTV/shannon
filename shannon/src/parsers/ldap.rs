@@ -426,9 +426,9 @@ mod tests {
         match p.parse(&pdu, Direction::Tx) {
             LdapParserOutput::Record { record, consumed } => {
                 assert_eq!(record.message_id, 1);
-                match record.op {
+                match &record.op {
                     LdapOp::BindRequest { version, dn, auth_mech } => {
-                        assert_eq!(version, 3);
+                        assert_eq!(*version, 3);
                         assert_eq!(dn, "cn=admin,dc=example,dc=org");
                         assert!(matches!(auth_mech, AuthMech::Simple));
                     }

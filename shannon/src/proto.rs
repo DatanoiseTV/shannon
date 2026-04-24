@@ -886,7 +886,7 @@ mod tests {
         // Compile a toy .proto on the fly.
         let tmp = tempfile::tempdir().unwrap();
         let proto_path = tmp.path().join("toy.proto");
-        std::fs::write(
+        fs::write(
             &proto_path,
             r#"
                 syntax = "proto3";

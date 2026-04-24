@@ -193,8 +193,12 @@ mod tests {
     #[test]
     fn non_enip_bypasses() {
         let mut p = EnipParser::default();
+        // Need ≥24 bytes to exercise the command check.
         assert!(matches!(
-            p.parse(b"GET / HTTP/1.1\r\n\r\n", Direction::Tx),
+            p.parse(
+                b"GET / HTTP/1.1 with some more filler bytes here\r\n",
+                Direction::Tx
+            ),
             EnipParserOutput::Skip(_)
         ));
     }

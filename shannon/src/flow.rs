@@ -26,6 +26,7 @@ use crate::parsers::{
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
     dnp3::{Dnp3Parser, Dnp3ParserOutput, Dnp3Record},
     enip::{EnipParser, EnipParserOutput, EnipRecord},
+    ftp::{FtpParser, FtpParserOutput, FtpRecord},
     http1::{Http1Parser, ParsedRecord as Http1Record, ParserOutput as Http1Output},
     http2::{Http2Parser, Http2ParserOutput, Http2Record},
     iec104::{Iec104Parser, Iec104ParserOutput, Iec104Record},
@@ -43,6 +44,7 @@ use crate::parsers::{
     postgres::{PgParserOutput, PgRecord, PostgresParser},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
     s7comm::{S7Parser, S7ParserOutput, S7Record},
+    sip::{SipParser, SipParserOutput, SipRecord},
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
     ssh::{SshParser, SshParserOutput, SshRecord},
     stun::{StunParser, StunParserOutput, StunRecord},
@@ -86,6 +88,8 @@ pub enum Protocol {
     Enip,
     Bacnet,
     Stun,
+    Ftp,
+    Sip,
     Bypass,
 }
 
@@ -118,6 +122,8 @@ impl Protocol {
             Self::Enip => "enip",
             Self::Bacnet => "bacnet",
             Self::Stun => "stun",
+            Self::Ftp => "ftp",
+            Self::Sip => "sip",
             Self::Bypass => "-",
         }
     }
@@ -149,6 +155,8 @@ pub enum AnyRecord {
     Enip(Box<EnipRecord>),
     Bacnet(Box<BacnetRecord>),
     Stun(Box<StunRecord>),
+    Ftp(Box<FtpRecord>),
+    Sip(Box<SipRecord>),
 }
 
 impl AnyRecord {
@@ -179,6 +187,8 @@ impl AnyRecord {
             Self::Enip(_) => "enip",
             Self::Bacnet(_) => "bacnet",
             Self::Stun(_) => "stun",
+            Self::Ftp(_) => "ftp",
+            Self::Sip(_) => "sip",
         }
     }
 
@@ -209,6 +219,8 @@ impl AnyRecord {
             Self::Enip(r) => r.display_line(),
             Self::Bacnet(r) => r.display_line(),
             Self::Stun(r) => r.display_line(),
+            Self::Ftp(r) => r.display_line(),
+            Self::Sip(r) => r.display_line(),
         }
     }
 }
@@ -294,6 +306,8 @@ struct ParserSlot {
     enip: Option<EnipParser>,
     bacnet: Option<BacnetParser>,
     stun: Option<StunParser>,
+    ftp: Option<FtpParser>,
+    sip: Option<SipParser>,
 }
 
 #[derive(Default)]
@@ -372,6 +386,8 @@ impl FlowTable {
             Protocol::Enip => drive_enip(state, dir),
             Protocol::Bacnet => drive_bacnet(state, dir),
             Protocol::Stun => drive_stun(state, dir),
+            Protocol::Ftp => drive_ftp(state, dir),
+            Protocol::Sip => drive_sip(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -406,6 +422,8 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         44818 | 2222 => return Protocol::Enip,
         47808 | 47809 => return Protocol::Bacnet,
         3478 | 5349 => return Protocol::Stun,
+        21 => return Protocol::Ftp,
+        5060 | 5061 => return Protocol::Sip,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1074,6 +1092,52 @@ fn drive_stun(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Stun(Box::new(record)));
             }
             StunParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_ftp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.ftp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.ftp),
+    };
+    let parser = slot.get_or_insert_with(FtpParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            FtpParserOutput::Need => break,
+            FtpParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Ftp(Box::new(record)));
+            }
+            FtpParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_sip(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.sip),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.sip),
+    };
+    let parser = slot.get_or_insert_with(SipParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            SipParserOutput::Need => break,
+            SipParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Sip(Box::new(record)));
+            }
+            SipParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

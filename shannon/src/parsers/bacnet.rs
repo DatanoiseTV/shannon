@@ -250,10 +250,15 @@ fn decode_apdu(buf: &[u8]) -> Option<Apdu> {
     let pdu_type = (buf[0] >> 4) & 0x0f;
     let (service_choice, service_name) = match pdu_type {
         0x0 => {
-            // Confirmed-Request: [type|flags] [max_seg/max_apdu]
-            //                    (opt seq+window) [service_choice] ...
+            // Confirmed-Request (20.1.2):
+            //   byte 0: pdu_type<<4 | SEG<<3 | MORE<<2 | SA<<1 | 0
+            //   byte 1: max-segments (3b) | max-apdu (4b)
+            //   byte 2: invoke ID
+            //   byte 3 (if SEG): sequence number
+            //   byte 4 (if SEG): proposed window size
+            //   byte X: service choice
             let has_seg = buf[0] & 0x08 != 0;
-            let mut j = 2usize;
+            let mut j = 3usize;
             if has_seg {
                 j += 2;
             }

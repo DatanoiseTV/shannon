@@ -296,12 +296,26 @@ impl Http1Parser {
                 ParserOutput::Skip(left_val + 2)
             }
             ChunkState::AfterData => {
-                // After AfterData, loop to Size.
+                // AfterData is transient — transition to Size and let
+                // the outer caller re-enter with the same buffer. We
+                // report Skip(0) so loop logic that advances by `n`
+                // doesn't stall, and the driver re-enters parse().
                 self.state = State::Chunked(ChunkState::Size);
-                ParserOutput::Need
+                ParserOutput::Skip(0)
             }
             ChunkState::Trailer => {
-                // Skip optional trailer headers terminated by CRLFCRLF.
+                // RFC 7230: last-chunk is "0 CRLF trailer-part CRLF".
+                // With no trailer headers that's just CRLF; with
+                // trailers it's "<field>: <val>\r\n...\r\n\r\n". Accept
+                // either form.
+                if buf.len() < 2 {
+                    return ParserOutput::Need;
+                }
+                if buf.starts_with(b"\r\n") {
+                    self.state = State::Headers;
+                    let rec = self.emit(true);
+                    return ParserOutput::Record { record: rec, consumed: 2 };
+                }
                 let Some(end) = find_double_crlf(buf) else {
                     return ParserOutput::Need;
                 };
@@ -420,8 +434,7 @@ mod tests {
         let mut got = None;
         for _ in 0..20 {
             match p.parse(&resp[offset..], Direction::Rx) {
-                ParserOutput::Record { record, consumed } => {
-                    offset += consumed;
+                ParserOutput::Record { record, consumed: _ } => {
                     got = Some(record);
                     break;
                 }

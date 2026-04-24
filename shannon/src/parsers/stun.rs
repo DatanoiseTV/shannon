@@ -384,8 +384,10 @@ mod tests {
     #[test]
     fn non_stun_bypasses() {
         let mut p = StunParser::default();
+        // Need ≥20 bytes so the header check runs; top 2 bits of 'G'
+        // (0x47) are 01 → bypass.
         assert!(matches!(
-            p.parse(b"GET / HTTP/1.1\r\n\r\n", Direction::Tx),
+            p.parse(b"GET / HTTP/1.1 with padding here\r\n", Direction::Tx),
             StunParserOutput::Skip(_)
         ));
     }
