@@ -203,6 +203,10 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
             if d.multicast { "mdns" } else { "dns" },
             d.questions.first().map(|q| q.name.clone()),
         ),
+        AnyRecord::Quic(q) => (
+            "quic",
+            q.tls.as_ref().and_then(|t| t.sni.clone()),
+        ),
     }
 }
 

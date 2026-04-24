@@ -51,6 +51,7 @@ use crate::parsers::{
     oracle::{OracleParser, OracleParserOutput, OracleRecord},
     pop3::{Pop3Parser, Pop3ParserOutput, Pop3Record},
     postgres::{PgParserOutput, PgRecord, PostgresParser},
+    quic::{QuicParser, QuicParserOutput, QuicRecord},
     radius::{RadiusParser, RadiusParserOutput, RadiusRecord},
     rdp::{RdpParser, RdpParserOutput, RdpRecord},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
@@ -135,6 +136,7 @@ pub enum Protocol {
     Smpp,
     Dns,
     Mdns,
+    Quic,
     Bypass,
 }
 
@@ -192,6 +194,7 @@ impl Protocol {
             Self::Smpp => "smpp",
             Self::Dns => "dns",
             Self::Mdns => "mdns",
+            Self::Quic => "quic",
             Self::Bypass => "-",
         }
     }
@@ -247,6 +250,7 @@ pub enum AnyRecord {
     Rtsp(Box<RtspRecord>),
     Smpp(Box<SmppRecord>),
     Dns(Box<DnsRecord>),
+    Quic(Box<QuicRecord>),
 }
 
 impl AnyRecord {
@@ -301,6 +305,7 @@ impl AnyRecord {
             Self::Rtsp(_) => "rtsp",
             Self::Smpp(_) => "smpp",
             Self::Dns(r) => if r.multicast { "mdns" } else { "dns" },
+            Self::Quic(_) => "quic",
         }
     }
 
@@ -355,6 +360,7 @@ impl AnyRecord {
             Self::Rtsp(r) => r.display_line(),
             Self::Smpp(r) => r.display_line(),
             Self::Dns(r) => r.display_line(),
+            Self::Quic(r) => r.display_line(),
         }
     }
 }
@@ -464,6 +470,7 @@ struct ParserSlot {
     rtsp: Option<RtspParser>,
     smpp: Option<SmppParser>,
     dns: Option<DnsParser>,
+    quic: Option<QuicParser>,
 }
 
 #[derive(Default)]
@@ -567,6 +574,7 @@ impl FlowTable {
             Protocol::Smpp => drive_smpp(state, dir),
             Protocol::Dns => drive_dns(state, dir, false),
             Protocol::Mdns => drive_dns(state, dir, true),
+            Protocol::Quic => drive_quic(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -639,6 +647,20 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
 fn signature(buf: &[u8]) -> Option<Protocol> {
     if buf.len() < 4 {
         return None;
+    }
+    // QUIC v1 long-header: first byte has the form+fixed bits set
+    // (0xc0 mask) and the next 4 bytes are the version, which for v1
+    // is 0x00000001. We check the version before TLS because a QUIC
+    // Initial *could* theoretically begin with bytes that are also
+    // valid TLS — but version=1 is unique.
+    if buf.len() >= 5
+        && (buf[0] & 0xc0) == 0xc0
+        && buf[1] == 0x00
+        && buf[2] == 0x00
+        && buf[3] == 0x00
+        && buf[4] == 0x01
+    {
+        return Some(Protocol::Quic);
     }
     // TLS handshake record: 0x16 (type=Handshake) + 0x03 0x0[0..=4] version.
     if buf.len() >= 5
@@ -1857,6 +1879,29 @@ fn drive_dns(state: &mut FlowState, dir: Direction, mdns: bool) -> Vec<AnyRecord
                 out.push(AnyRecord::Dns(Box::new(record)));
             }
             DnsParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_quic(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.quic),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.quic),
+    };
+    let parser = slot.get_or_insert_with(QuicParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            QuicParserOutput::Need => break,
+            QuicParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Quic(Box::new(record)));
+            }
+            QuicParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

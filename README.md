@@ -203,7 +203,7 @@ and legacy chat.
 | GnuTLS | `gnutls_record_{send,recv}` uprobes |
 | NSS | `PR_Read` / `PR_Write` + `ssl3_SendPlainText` uprobes |
 | Go `crypto/tls` | `/proc/<pid>/exe` symbol scan → `crypto/tls.(*Conn).{R,W}` |
-| QUIC (partial) | Packet type + SNI from Initial; encrypted payload deferred |
+| QUIC v1 | Client Initial decrypted with DCID-derived keys (RFC 9001); SNI + ALPN recovered. 1-RTT payload deferred |
 
 Each connection carries a protocol state machine that can *upgrade itself*:
 HTTP/1.1 → WebSocket → Socket.IO (on event frames), HTTP/2 → gRPC
@@ -216,7 +216,8 @@ Both transports captured in both directions — **TCP** via
 + port read off `struct sock` with a `msg->msg_name` fallback for
 unconnected sockets).
 
-Deferred to v0.2: Rust `rustls`, Java JSSE, QUIC payload decryption.
+Deferred to v0.2: Rust `rustls`, Java JSSE, QUIC 1-RTT payload
+(needs the TLS master secret shannon never sees).
 
 ## Privacy
 

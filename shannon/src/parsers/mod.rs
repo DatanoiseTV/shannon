@@ -43,6 +43,7 @@ pub mod opcua;
 pub mod oracle;
 pub mod pop3;
 pub mod postgres;
+pub mod quic;
 pub mod radius;
 pub mod rdp;
 pub mod redis;
