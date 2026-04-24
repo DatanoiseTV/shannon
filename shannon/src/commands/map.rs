@@ -167,6 +167,10 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
             _ => None,
         }),
         AnyRecord::Smpp(s) => ("smpp", s.system_id.clone()),
+        AnyRecord::Dns(d) => (
+            if d.multicast { "mdns" } else { "dns" },
+            d.questions.first().map(|q| q.name.clone()),
+        ),
     }
 }
 

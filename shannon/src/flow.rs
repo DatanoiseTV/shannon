@@ -27,6 +27,7 @@ use crate::parsers::{
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
     dhcp::{DhcpParser, DhcpParserOutput, DhcpRecord},
     dnp3::{Dnp3Parser, Dnp3ParserOutput, Dnp3Record},
+    dns::{DnsParser, DnsParserOutput, DnsRecord},
     enip::{EnipParser, EnipParserOutput, EnipRecord},
     ftp::{FtpParser, FtpParserOutput, FtpRecord},
     http1::{Http1Parser, ParsedRecord as Http1Record, ParserOutput as Http1Output},
@@ -132,6 +133,8 @@ pub enum Protocol {
     Nfs,
     Rtsp,
     Smpp,
+    Dns,
+    Mdns,
     Bypass,
 }
 
@@ -187,6 +190,8 @@ impl Protocol {
             Self::Nfs => "nfs",
             Self::Rtsp => "rtsp",
             Self::Smpp => "smpp",
+            Self::Dns => "dns",
+            Self::Mdns => "mdns",
             Self::Bypass => "-",
         }
     }
@@ -241,6 +246,7 @@ pub enum AnyRecord {
     Nfs(Box<NfsRecord>),
     Rtsp(Box<RtspRecord>),
     Smpp(Box<SmppRecord>),
+    Dns(Box<DnsRecord>),
 }
 
 impl AnyRecord {
@@ -294,6 +300,7 @@ impl AnyRecord {
             Self::Nfs(_) => "nfs",
             Self::Rtsp(_) => "rtsp",
             Self::Smpp(_) => "smpp",
+            Self::Dns(r) => if r.multicast { "mdns" } else { "dns" },
         }
     }
 
@@ -347,6 +354,7 @@ impl AnyRecord {
             Self::Nfs(r) => r.display_line(),
             Self::Rtsp(r) => r.display_line(),
             Self::Smpp(r) => r.display_line(),
+            Self::Dns(r) => r.display_line(),
         }
     }
 }
@@ -455,6 +463,7 @@ struct ParserSlot {
     nfs: Option<NfsParser>,
     rtsp: Option<RtspParser>,
     smpp: Option<SmppParser>,
+    dns: Option<DnsParser>,
 }
 
 #[derive(Default)]
@@ -556,6 +565,8 @@ impl FlowTable {
             Protocol::Nfs => drive_nfs(state, dir),
             Protocol::Rtsp => drive_rtsp(state, dir),
             Protocol::Smpp => drive_smpp(state, dir),
+            Protocol::Dns => drive_dns(state, dir, false),
+            Protocol::Mdns => drive_dns(state, dir, true),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -613,6 +624,8 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         2049 => return Protocol::Nfs,
         554 | 8554 => return Protocol::Rtsp,
         2775 => return Protocol::Smpp,
+        53 => return Protocol::Dns,
+        5353 => return Protocol::Mdns,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1819,6 +1832,31 @@ fn drive_smpp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Smpp(Box::new(record)));
             }
             SmppParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_dns(state: &mut FlowState, dir: Direction, mdns: bool) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.dns),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.dns),
+    };
+    let parser = slot.get_or_insert_with(|| {
+        if mdns { DnsParser::new_mdns() } else { DnsParser::default() }
+    });
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            DnsParserOutput::Need => break,
+            DnsParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Dns(Box::new(record)));
+            }
+            DnsParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
