@@ -1,0 +1,18 @@
+# /etc/shannon/shannon.toml
+#
+# Optional config file. Anything set here is overridden by command-line
+# flags. Most operators leave this empty and pass flags through
+# /etc/default/shannon (used by the systemd unit) instead.
+
+# [redact]
+# # auto | strict | off — see SECURITY.md before changing this from auto
+# level = "auto"
+
+# [output]
+# # default capture format when --output is omitted
+# format = "jsonl"
+# compress = "zstd"
+
+# [filter]
+# # default protocol allowlist; empty = everything
+# protocols = []

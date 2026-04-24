@@ -1,0 +1,57 @@
+[Unit]
+Description=shannon — zero-instrumentation L7 observability via eBPF
+Documentation=https://github.com/DatanoiseTV/shannon
+After=network-online.target
+Wants=network-online.target
+ConditionKernelVersion=>=5.8
+
+# Throttle restart loop: a verifier failure re-firing forever fills logs
+# and obscures the real error. These keys belong in [Unit], not [Service].
+StartLimitIntervalSec=5min
+StartLimitBurst=3
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/shannon
+
+# eBPF wants ample locked memory; the kernel doesn't honour the soft
+# limit, so leave it explicit. Without this the verifier fails on
+# moderately complex programs.
+LimitMEMLOCK=infinity
+
+# Keep the recording somewhere bounded by --rotate so the disk doesn't
+# fill silently. /var/lib/shannon is created by the postinst.
+StateDirectory=shannon
+RuntimeDirectory=shannon
+WorkingDirectory=/var/lib/shannon
+
+# Use a shell so empty SHANNON_EXTRA_ARGS doesn't expand to a literal
+# empty token (which clap rejects as `unexpected argument ''`).
+ExecStart=/bin/sh -c '/usr/bin/shannon record \
+  --output /var/lib/shannon/capture.jsonl.zst \
+  --rotate "$SHANNON_ROTATE_SIZE" \
+  $SHANNON_EXTRA_ARGS'
+
+# Hardening — the loader itself needs to see the kernel and load BPF
+# programs, but the userspace decoder doesn't need to write outside
+# its state directory or talk to D-Bus.
+NoNewPrivileges=false
+ProtectSystem=strict
+ReadWritePaths=/var/lib/shannon /var/log/shannon
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=no
+ProtectKernelTunables=no
+ProtectKernelModules=no
+ProtectControlGroups=no
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+# Restart on failure; rate-limit lives in [Unit] above.
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

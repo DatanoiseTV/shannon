@@ -66,3 +66,36 @@ rstest     = { workspace = true }
 
 [lints]
 workspace = true
+
+# ---------------------------------------------------------------------------
+# Debian packaging — produced by `cargo deb`.
+# ---------------------------------------------------------------------------
+[package.metadata.deb]
+maintainer        = "shannon contributors"
+copyright         = "2026, shannon contributors <https://github.com/DatanoiseTV/shannon>"
+license-file      = ["../LICENSE-APACHE", "0"]
+extended-description = """\
+shannon is a zero-instrumentation L7 observability tool. It loads
+eBPF programs into the kernel (kprobes on TCP/UDP, uprobes on libssl
+and other TLS runtimes) and decodes 50+ application protocols in
+userspace — HTTP, gRPC, Postgres, MySQL, Redis, MongoDB, Kafka,
+DNS, TLS, QUIC, SMB, NFS, Modbus, S7comm, and many more.
+
+It runs as a single static binary on a host or Kubernetes node;
+no sidecars, no application changes, no private keys, no kernel
+modules. Requires Linux ≥ 5.8 with BTF.
+"""
+section           = "admin"
+priority          = "optional"
+depends           = "$auto, libelf1t64 | libelf1, libssl3 | libssl1.1"
+recommends        = "libsqlite3-0"
+assets = [
+    ["target/release/shannon",       "usr/bin/",                              "755"],
+    ["../README.md",                 "usr/share/doc/shannon/README.md",       "644"],
+    ["../DEMO.md",                   "usr/share/doc/shannon/DEMO.md",         "644"],
+    ["../SECURITY.md",               "usr/share/doc/shannon/SECURITY.md",     "644"],
+    ["../packaging/shannon.default", "etc/default/shannon",                   "644"],
+    ["../packaging/shannon.toml",    "etc/shannon/shannon.toml",              "644"],
+]
+maintainer-scripts = "../packaging/debian"
+systemd-units = { unit-name = "shannon", enable = false, start = false, unit-scripts = "../packaging" }

@@ -1,0 +1,19 @@
+# /etc/default/shannon
+#
+# Tunables for the systemd-managed `shannon record` recorder. Edit and
+# `systemctl restart shannon` to apply.
+
+# Rotate the capture file once it grows past this size. Suffixes K/M/G
+# accepted. Old captures are renamed capture.jsonl.zst.<n> next to the
+# live one; rotate them off-host with logrotate or your shipper of
+# choice.
+SHANNON_ROTATE_SIZE=200M
+
+# Anything else you want appended to the `record` invocation. Common
+# choices (set verbosity here too — `-v` info, `-vv` debug, `-vvv` trace):
+#   -v                                # info logs
+#   --protocol http --protocol dns    # narrow what's recorded
+#   --comm 'nginx*'                   # only specific processes
+#   --pod my-app-7d8c                 # one Kubernetes pod
+#   --max-size 5G                     # absolute disk cap
+SHANNON_EXTRA_ARGS=

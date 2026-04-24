@@ -1,0 +1,23 @@
+#!/bin/sh
+# prerm — stop the unit before the binary disappears.
+set -e
+
+case "$1" in
+  remove|upgrade|deconfigure)
+    if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+      systemctl --quiet stop shannon.service 2>/dev/null || true
+    fi
+    ;;
+
+  failed-upgrade)
+    ;;
+
+  *)
+    echo "prerm called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

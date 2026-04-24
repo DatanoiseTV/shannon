@@ -1,0 +1,33 @@
+#!/bin/sh
+# postinst — finish installing shannon.
+set -e
+
+case "$1" in
+  configure)
+    # Spool directory for rotated captures and runtime sockets.
+    install -d -m 0750 /var/lib/shannon
+    install -d -m 0750 /var/log/shannon
+
+    # Don't enable the unit by default — most operators want shannon
+    # interactively (`sudo shannon`, `sudo shannon trace …`). Folks who
+    # want continuous background recording opt in:
+    #
+    #   sudo systemctl enable --now shannon
+    #
+    # The dh_installsystemd helper that cargo-deb shells out to has
+    # already registered the unit with systemd; nothing else to do.
+    :
+    ;;
+
+  abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+  *)
+    echo "postinst called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

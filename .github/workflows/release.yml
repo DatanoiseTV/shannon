@@ -1,0 +1,151 @@
+name: release
+
+# Triggered on a semver tag push (e.g. `v0.1.0`). Produces:
+#   * shannon_<ver>-1_amd64.deb         — Debian package for Ubuntu 22.04+/Debian 12+
+#   * shannon-<ver>-x86_64-unknown-linux-gnu.tar.gz  — bare binary tarball
+#
+# Both attached to a GitHub release. Linux x86_64 only — eBPF + BTF
+# constrain the support matrix; arm64 hasn't been validated.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'   # pre-releases like v0.1.0-rc1
+  workflow_dispatch:                # manual fire for dry-run / re-cut
+
+permissions:
+  contents: write                   # needed to create the GitHub release
+
+jobs:
+  build:
+    name: build x86_64-linux release
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tarball: ${{ steps.pack.outputs.tarball }}
+      deb:     ${{ steps.deb.outputs.deb }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: meta
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            ver="${GITHUB_REF_NAME#v}"
+          else
+            ver="$(grep -m1 '^version' shannon/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+            ver="${ver}-dev$(date -u +%Y%m%d%H%M)"
+          fi
+          echo "version=$ver" >>"$GITHUB_OUTPUT"
+          echo "Building shannon $ver"
+
+      - name: Install toolchains (stable + nightly)
+        run: |
+          rustup toolchain install stable --component rustfmt,clippy
+          rustup default stable
+          rustup toolchain install nightly --component rust-src
+
+      - name: System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang llvm llvm-dev libclang-dev libelf-dev pkg-config \
+            dpkg-dev fakeroot
+
+      - name: Install bpf-linker + cargo-deb
+        run: |
+          cargo install bpf-linker --locked
+          cargo install cargo-deb --locked
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release --workspace -p shannon
+
+      - name: Pack tarball
+        id: pack
+        run: |
+          ver="${{ steps.meta.outputs.version }}"
+          stage="shannon-${ver}-x86_64-unknown-linux-gnu"
+          mkdir -p "dist/$stage"
+          cp target/release/shannon "dist/$stage/"
+          cp README.md DEMO.md SECURITY.md LICENSE-APACHE LICENSE-MIT "dist/$stage/" 2>/dev/null || true
+          tar -C dist -czf "dist/${stage}.tar.gz" "$stage"
+          (cd dist && sha256sum "${stage}.tar.gz" >"${stage}.tar.gz.sha256")
+          echo "tarball=dist/${stage}.tar.gz" >>"$GITHUB_OUTPUT"
+          ls -la dist/
+
+      - name: Build .deb
+        id: deb
+        run: |
+          cargo deb -p shannon --no-build
+          cp target/debian/*.deb dist/
+          (cd dist && for f in *.deb; do sha256sum "$f" >"${f}.sha256"; done)
+          deb=$(ls dist/*.deb | head -n1)
+          echo "deb=$deb" >>"$GITHUB_OUTPUT"
+          ls -la dist/
+
+      - name: Smoke-check the binary
+        run: |
+          ./target/release/shannon --version
+          ./target/release/shannon doctor || true   # exits non-zero without root, that's fine
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shannon-linux-x86_64
+          path: dist/
+
+  release:
+    name: publish github release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: shannon-linux-x86_64
+          path: dist/
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          prev=$(git tag --sort=-v:refname | grep -v "^${tag}$" | head -n1 || true)
+          {
+            echo "## shannon ${tag}"
+            echo
+            if [ -n "$prev" ]; then
+              echo "### Changes since ${prev}"
+              git log --pretty='- %s' "${prev}..${tag}"
+            else
+              echo "First tagged release."
+            fi
+            echo
+            echo "### Install"
+            echo
+            echo '```bash'
+            echo "curl -LO https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/shannon_${tag#v}-1_amd64.deb"
+            echo "sudo dpkg -i shannon_${tag#v}-1_amd64.deb"
+            echo "sudo systemctl enable --now shannon   # optional: continuous recorder"
+            echo '```'
+            echo
+            echo "### Verify"
+            echo
+            echo '```bash'
+            echo "sha256sum -c shannon_${tag#v}-1_amd64.deb.sha256"
+            echo '```'
+          } >notes.md
+          cat notes.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: |
+            dist/*.deb
+            dist/*.tar.gz
+            dist/*.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: false

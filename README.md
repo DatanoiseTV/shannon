@@ -76,10 +76,27 @@ shannon completions zsh > ~/.zfunc/_shannon
 
 ## Install
 
-Binary releases are not yet published. Build from source:
+### From a release `.deb` (Debian / Ubuntu, x86_64)
+
+Each tagged release ships a `.deb` and a SHA-256 sum:
 
 ```bash
-git clone https://github.com/<owner>/shannon
+ver=0.1.0
+curl -LO https://github.com/DatanoiseTV/shannon/releases/download/v${ver}/shannon_${ver}-1_amd64.deb
+sudo dpkg -i shannon_${ver}-1_amd64.deb
+sudo shannon doctor               # confirm BTF + kprobe targets
+sudo systemctl enable --now shannon   # optional: continuous background recorder
+```
+
+The package installs `/usr/bin/shannon`, a hardened systemd unit at
+`/usr/lib/systemd/system/shannon.service` (disabled by default — opt
+in if you want a recorder service), `/etc/default/shannon` for tunables,
+and the docs under `/usr/share/doc/shannon/`.
+
+### From source
+
+```bash
+git clone https://github.com/DatanoiseTV/shannon
 cd shannon
 rustup toolchain install nightly --component rust-src
 cargo install bpf-linker
