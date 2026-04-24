@@ -364,7 +364,13 @@ fn render_record(out: &mut impl Write, dir: Direction, r: &AnyRecord) -> std::io
         r.protocol(),
         arrow(dir),
         r.display_line()
-    )
+    )?;
+    if let AnyRecord::Tls(tls) = r {
+        for w in &tls.warnings {
+            writeln!(out, "{}  ⚠ tls  {}", wall_clock(), w.label())?;
+        }
+    }
+    Ok(())
 }
 
 fn render_event(

@@ -95,7 +95,7 @@ and legacy chat.
 | GraphQL | On HTTP: operation name + root field (query / mutation / subscription) |
 | WebSocket | RFC 6455 frames; follows HTTP/1.1 `101 Upgrade` handshake |
 | Socket.IO / Engine.IO | Event name, namespace, JSON args, ack IDs |
-| TLS 1.0-1.3 | ClientHello / ServerHello SNI + ALPN + cipher-suite inspection |
+| TLS 1.0-1.3 | ClientHello / ServerHello SNI + ALPN + cipher-suite inspection; ServerHello warnings for legacy versions, NULL / EXPORT / RC4 / 3DES / CBC-SHA1 / anon-DH ciphers |
 
 ### Databases
 

@@ -68,6 +68,44 @@ pub struct TlsRecord {
     pub server_cipher_suite: Option<u16>,
     pub sni: Option<String>,
     pub alpn: Vec<String>,
+    /// Hygiene warnings populated on ServerHello: outdated protocol
+    /// version, null / export / RC4 / 3DES cipher families, etc.
+    /// Empty on ClientHello — a client advertises everything it can
+    /// do and only the *server's* pick is actionable.
+    pub warnings: Vec<TlsWarning>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TlsWarning {
+    /// Server picked SSL 3.0 / TLS 1.0 / TLS 1.1 — all withdrawn from
+    /// modern Web PKI, in some jurisdictions prohibited for CDE traffic.
+    LegacyVersion(&'static str),
+    /// Null cipher suite — no encryption at all.
+    NullCipher,
+    /// Export-grade cipher (40/56-bit key) — FREAK-vulnerable.
+    ExportCipher,
+    /// RC4 — BEAR / Bar Mitzvah / RFC 7465 prohibited.
+    Rc4,
+    /// 3DES — SWEET32 birthday-bound.
+    TripleDes,
+    /// CBC-mode with HMAC-SHA1 — Lucky13 / BEAST territory.
+    CbcSha1,
+    /// Anonymous Diffie-Hellman — no server authentication.
+    AnonymousDh,
+}
+
+impl TlsWarning {
+    pub fn label(&self) -> String {
+        match self {
+            Self::LegacyVersion(v) => format!("legacy {v}"),
+            Self::NullCipher => "NULL cipher (no encryption)".into(),
+            Self::ExportCipher => "EXPORT-grade cipher".into(),
+            Self::Rc4 => "RC4 (RFC 7465 prohibited)".into(),
+            Self::TripleDes => "3DES (SWEET32)".into(),
+            Self::CbcSha1 => "CBC + HMAC-SHA1 (Lucky13)".into(),
+            Self::AnonymousDh => "anonymous DH (no auth)".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,6 +259,7 @@ fn parse_client_hello(hs: &[u8], dir: Direction, record_version: u16) -> Option<
         server_cipher_suite: None,
         sni,
         alpn,
+        warnings: Vec::new(),
     })
 }
 
@@ -253,6 +292,18 @@ fn parse_server_hello(hs: &[u8], dir: Direction, record_version: u16) -> Option<
     let (sni, alpn, supported_versions) = walk_extensions(extensions_bytes);
     // Server responds with the *one* version it picked in supported_versions.
     let negotiated_tls13 = supported_versions.iter().any(|&v| v == 0x0304);
+    // Actionable protocol-hygiene warnings, server-side only.
+    let mut warnings = Vec::new();
+    let effective_version = if negotiated_tls13 { 0x0304 } else { handshake_version };
+    match effective_version {
+        0x0300 => warnings.push(TlsWarning::LegacyVersion("SSL 3.0")),
+        0x0301 => warnings.push(TlsWarning::LegacyVersion("TLS 1.0")),
+        0x0302 => warnings.push(TlsWarning::LegacyVersion("TLS 1.1")),
+        _ => {}
+    }
+    for w in classify_cipher_suite(cipher) {
+        warnings.push(w);
+    }
     Some(TlsRecord {
         direction: dir,
         kind: HelloKind::Server,
@@ -263,7 +314,64 @@ fn parse_server_hello(hs: &[u8], dir: Direction, record_version: u16) -> Option<
         server_cipher_suite: Some(cipher),
         sni,
         alpn,
+        warnings,
     })
+}
+
+/// Classify a single TLS cipher suite number into zero or more
+/// hygiene warnings. The catalogue covers the cases that actually
+/// show up on production networks — NULL / EXPORT / RC4 / 3DES /
+/// CBC-SHA1 / anon-DH — without pretending to enumerate every
+/// assignment. Anything not flagged here is either modern AEAD (good)
+/// or obscure enough that shannon surfaces the suite number raw and
+/// lets the operator judge.
+fn classify_cipher_suite(id: u16) -> Vec<TlsWarning> {
+    let mut out = Vec::new();
+    // Well-known TLS_RSA_WITH_NULL_* and TLS_ECDH_*_NULL_* lines.
+    if matches!(id, 0x0001 | 0x0002 | 0x003B | 0xC001 | 0xC006 | 0xC00B | 0xC010 | 0xC015) {
+        out.push(TlsWarning::NullCipher);
+    }
+    // EXPORT-grade (40/56-bit). Covers RSA-EXPORT-RC4-40, RSA-EXPORT-
+    // DES40-CBC-SHA, DHE-DSS-EXPORT-DES40-CBC-SHA, …
+    if matches!(id, 0x0003 | 0x0006 | 0x0008 | 0x000B | 0x000E | 0x0011 | 0x0014 | 0x0017 | 0x0019) {
+        out.push(TlsWarning::ExportCipher);
+    }
+    // RC4 anywhere in the suite.
+    if matches!(
+        id,
+        0x0004 | 0x0005 | 0x0018 | 0x001E
+            | 0x0020 | 0x0024 | 0x0028 | 0x002B
+            | 0x008A | 0x008E | 0x0092
+            | 0xC002 | 0xC007 | 0xC00C | 0xC011 | 0xC016
+            | 0xC033
+    ) {
+        out.push(TlsWarning::Rc4);
+    }
+    // 3DES-CBC-SHA family.
+    if matches!(
+        id,
+        0x000A | 0x000D | 0x0010 | 0x0013 | 0x0016 | 0x001B
+            | 0x008B | 0x008F | 0x0093
+            | 0xC003 | 0xC008 | 0xC00D | 0xC012 | 0xC017
+    ) {
+        out.push(TlsWarning::TripleDes);
+    }
+    // CBC + HMAC-SHA1 (Lucky13). Very broad list — catch the common
+    // AES-{128,256}-CBC-SHA and CAMELLIA-CBC-SHA assignments.
+    if matches!(
+        id,
+        0x002F | 0x0035 | 0x0041 | 0x0084 | 0xC013 | 0xC014 | 0xC027 | 0xC028
+    ) {
+        out.push(TlsWarning::CbcSha1);
+    }
+    // Anonymous DH (no authentication).
+    if matches!(
+        id,
+        0x0017 | 0x0018 | 0x0019 | 0x001A | 0x001B | 0x0034 | 0x003A | 0x006C | 0x006D
+    ) {
+        out.push(TlsWarning::AnonymousDh);
+    }
+    out
 }
 
 fn walk_extensions(mut buf: &[u8]) -> (Option<String>, Vec<String>, Vec<u16>) {
@@ -453,5 +561,59 @@ mod tests {
     fn short_buffer_needs_more() {
         let mut p = TlsParser::default();
         assert!(matches!(p.parse(&[0x16, 0x03, 0x01], Direction::Tx), TlsParserOutput::Need));
+    }
+
+    /// Build a minimal ServerHello picking `handshake_version` and
+    /// cipher suite. No extensions (so no supported_versions trailer).
+    fn server_hello(handshake_version: u16, cipher: u16) -> Vec<u8> {
+        let mut hs = Vec::new();
+        hs.extend_from_slice(&handshake_version.to_be_bytes()); // legacy ver
+        hs.extend_from_slice(&[0u8; 32]); // random
+        hs.push(0); // sid len
+        hs.extend_from_slice(&cipher.to_be_bytes());
+        hs.push(0); // compression null
+        // no extensions block
+        let mut record = Vec::new();
+        record.push(HANDSHAKE);
+        record.extend_from_slice(&0x0303u16.to_be_bytes()); // record version
+        let mut hs_frame = Vec::new();
+        hs_frame.push(SERVER_HELLO);
+        hs_frame.extend_from_slice(&[0u8; 3]); // placeholder for u24 len
+        hs_frame.extend_from_slice(&hs);
+        let hs_len = hs_frame.len() - 4;
+        hs_frame[1] = ((hs_len >> 16) & 0xff) as u8;
+        hs_frame[2] = ((hs_len >> 8) & 0xff) as u8;
+        hs_frame[3] = (hs_len & 0xff) as u8;
+        record.extend_from_slice(&(hs_frame.len() as u16).to_be_bytes());
+        record.extend_from_slice(&hs_frame);
+        record
+    }
+
+    #[test]
+    fn server_hello_tls10_rc4_flags_both() {
+        // TLS 1.0 (0x0301) + TLS_RSA_WITH_RC4_128_SHA (0x0005).
+        let buf = server_hello(0x0301, 0x0005);
+        let mut p = TlsParser::default();
+        match p.parse(&buf, Direction::Rx) {
+            TlsParserOutput::Record { record, .. } => {
+                assert_eq!(record.kind, HelloKind::Server);
+                assert!(record.warnings.contains(&TlsWarning::LegacyVersion("TLS 1.0")));
+                assert!(record.warnings.contains(&TlsWarning::Rc4));
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn server_hello_modern_suite_no_warnings() {
+        // TLS 1.2 (0x0303) + TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 (0xc02f).
+        let buf = server_hello(0x0303, 0xc02f);
+        let mut p = TlsParser::default();
+        match p.parse(&buf, Direction::Rx) {
+            TlsParserOutput::Record { record, .. } => {
+                assert!(record.warnings.is_empty());
+            }
+            _ => panic!(),
+        }
     }
 }
