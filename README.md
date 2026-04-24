@@ -222,6 +222,16 @@ unconnected sockets).
 Deferred to v0.2: Rust `rustls`, Java JSSE, QUIC 1-RTT payload
 (needs the TLS master secret shannon never sees).
 
+### Process identity
+
+Every event also carries the originating process — pid, comm, uid/gid,
+and the resolved container or pod. Cgroup paths are walked at startup
+and refreshed periodically; Docker, containerd, CRI-O, Podman and
+plain systemd units all decode to a friendly name. On Kubernetes
+nodes, `/var/log/pods/` is parsed so you see `payments/billing-7d8c`
+instead of a UID hex string, and container entries inherit the pod
+context as `payments/billing-7d8c/<short-id>`.
+
 ## Privacy
 
 `shannon` sees plaintext payloads. Redaction is **on by default** (`--redact auto`)
