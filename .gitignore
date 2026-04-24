@@ -1,5 +1,7 @@
 # Rust
+target/
 /target
+/shannon-ebpf/target/
 **/*.rs.bk
 Cargo.lock.bak
 
