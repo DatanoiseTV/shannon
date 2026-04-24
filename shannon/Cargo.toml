@@ -50,6 +50,7 @@ prost-reflect       = { version = "0.14", features = ["serde"] }
 protox              = "0.7"
 zstd                = "0.13"
 flate2              = "1"
+brotli              = "7"
 x509-parser         = "0.17"
 sha2                = "0.10"
 

@@ -123,6 +123,13 @@ fn decompress(body: &[u8], encoding: &str) -> Result<Vec<u8>> {
                 zstd::stream::decode_all(body).context("zstd decode")?;
             Ok(decoded)
         }
+        "br" => {
+            let mut out = Vec::with_capacity(body.len() * 3);
+            let mut r = brotli::Decompressor::new(body, 4096);
+            use std::io::Read as _;
+            r.read_to_end(&mut out).context("brotli decode")?;
+            Ok(out)
+        }
         other => {
             tracing::debug!(encoding = %other, "unknown Content-Encoding; keeping bytes verbatim");
             Ok(body.to_vec())

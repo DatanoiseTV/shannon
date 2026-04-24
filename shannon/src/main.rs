@@ -9,6 +9,7 @@
 #![allow(dead_code)]
 
 mod api_catalog;
+mod aws;
 mod cert_dump;
 mod cli;
 mod commands;
@@ -26,6 +27,7 @@ mod pcap;
 mod proto;
 mod runtime;
 mod secrets;
+mod warnings;
 
 use std::process::ExitCode;
 
