@@ -26,6 +26,7 @@ pub mod http2;
 pub mod iec104;
 pub mod imap;
 pub mod kafka;
+pub mod kerberos;
 pub mod ldap;
 pub mod memcached;
 pub mod modbus;

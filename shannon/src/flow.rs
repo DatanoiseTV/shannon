@@ -33,6 +33,7 @@ use crate::parsers::{
     iec104::{Iec104Parser, Iec104ParserOutput, Iec104Record},
     imap::{ImapParser, ImapParserOutput, ImapRecord},
     kafka::{KafkaParser, KafkaParserOutput, KafkaRecord},
+    kerberos::{KerberosParser, KerberosParserOutput, KerberosRecord},
     ldap::{LdapParser, LdapParserOutput, LdapRecord},
     modbus::{ModbusParser, ModbusParserOutput, ModbusRecord},
     memcached::{McParserOutput, McRecord, MemcachedParser},
@@ -106,6 +107,7 @@ pub enum Protocol {
     Radius,
     Syslog,
     Amqp,
+    Kerberos,
     Bypass,
 }
 
@@ -148,6 +150,7 @@ impl Protocol {
             Self::Radius => "radius",
             Self::Syslog => "syslog",
             Self::Amqp => "amqp",
+            Self::Kerberos => "krb5",
             Self::Bypass => "-",
         }
     }
@@ -189,6 +192,7 @@ pub enum AnyRecord {
     Radius(Box<RadiusRecord>),
     Syslog(Box<SyslogRecord>),
     Amqp(Box<AmqpRecord>),
+    Kerberos(Box<KerberosRecord>),
 }
 
 impl AnyRecord {
@@ -229,6 +233,7 @@ impl AnyRecord {
             Self::Radius(_) => "radius",
             Self::Syslog(_) => "syslog",
             Self::Amqp(_) => "amqp",
+            Self::Kerberos(_) => "krb5",
         }
     }
 
@@ -269,6 +274,7 @@ impl AnyRecord {
             Self::Radius(r) => r.display_line(),
             Self::Syslog(r) => r.display_line(),
             Self::Amqp(r) => r.display_line(),
+            Self::Kerberos(r) => r.display_line(),
         }
     }
 }
@@ -364,6 +370,7 @@ struct ParserSlot {
     radius: Option<RadiusParser>,
     syslog: Option<SyslogParser>,
     amqp: Option<AmqpParser>,
+    kerberos: Option<KerberosParser>,
 }
 
 #[derive(Default)]
@@ -452,6 +459,7 @@ impl FlowTable {
             Protocol::Radius => drive_radius(state, dir),
             Protocol::Syslog => drive_syslog(state, dir),
             Protocol::Amqp => drive_amqp(state, dir),
+            Protocol::Kerberos => drive_kerberos(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -496,6 +504,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         1812 | 1813 => return Protocol::Radius,
         514 | 601 | 6514 => return Protocol::Syslog,
         5672 | 5671 => return Protocol::Amqp,
+        88 => return Protocol::Kerberos,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1403,6 +1412,29 @@ fn drive_amqp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Amqp(Box::new(record)));
             }
             AmqpParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_kerberos(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.kerberos),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.kerberos),
+    };
+    let parser = slot.get_or_insert_with(KerberosParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            KerberosParserOutput::Need => break,
+            KerberosParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Kerberos(Box::new(record)));
+            }
+            KerberosParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

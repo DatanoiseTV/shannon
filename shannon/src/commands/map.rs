@@ -151,6 +151,7 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::Radius(_) => ("radius", None),
         AnyRecord::Syslog(_) => ("syslog", None),
         AnyRecord::Amqp(_) => ("amqp", None),
+        AnyRecord::Kerberos(k) => ("krb5", k.realm.clone()),
     }
 }
 
