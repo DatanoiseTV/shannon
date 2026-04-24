@@ -39,10 +39,12 @@ use crate::parsers::{
     memcached::{McParserOutput, McRecord, MemcachedParser},
     mongodb::{MongoParser, MongoParserOutput, MongoRecord},
     mqtt::{MqttParser, MqttParserOutput, MqttRecord},
+    mssql::{MssqlParser, MssqlParserOutput, MssqlRecord},
     mysql::{MysqlParser, MysqlParserOutput, MysqlRecord},
     nats::{NatsParser, NatsParserOutput, NatsRecord},
     ntp::{NtpParser, NtpParserOutput, NtpRecord},
     opcua::{OpcuaParser, OpcuaParserOutput, OpcuaRecord},
+    oracle::{OracleParser, OracleParserOutput, OracleRecord},
     pop3::{Pop3Parser, Pop3ParserOutput, Pop3Record},
     postgres::{PgParserOutput, PgRecord, PostgresParser},
     radius::{RadiusParser, RadiusParserOutput, RadiusRecord},
@@ -108,6 +110,8 @@ pub enum Protocol {
     Syslog,
     Amqp,
     Kerberos,
+    Oracle,
+    Mssql,
     Bypass,
 }
 
@@ -151,6 +155,8 @@ impl Protocol {
             Self::Syslog => "syslog",
             Self::Amqp => "amqp",
             Self::Kerberos => "krb5",
+            Self::Oracle => "oracle",
+            Self::Mssql => "mssql",
             Self::Bypass => "-",
         }
     }
@@ -193,6 +199,8 @@ pub enum AnyRecord {
     Syslog(Box<SyslogRecord>),
     Amqp(Box<AmqpRecord>),
     Kerberos(Box<KerberosRecord>),
+    Oracle(Box<OracleRecord>),
+    Mssql(Box<MssqlRecord>),
 }
 
 impl AnyRecord {
@@ -234,6 +242,8 @@ impl AnyRecord {
             Self::Syslog(_) => "syslog",
             Self::Amqp(_) => "amqp",
             Self::Kerberos(_) => "krb5",
+            Self::Oracle(_) => "oracle",
+            Self::Mssql(_) => "mssql",
         }
     }
 
@@ -275,6 +285,8 @@ impl AnyRecord {
             Self::Syslog(r) => r.display_line(),
             Self::Amqp(r) => r.display_line(),
             Self::Kerberos(r) => r.display_line(),
+            Self::Oracle(r) => r.display_line(),
+            Self::Mssql(r) => r.display_line(),
         }
     }
 }
@@ -371,6 +383,8 @@ struct ParserSlot {
     syslog: Option<SyslogParser>,
     amqp: Option<AmqpParser>,
     kerberos: Option<KerberosParser>,
+    oracle: Option<OracleParser>,
+    mssql: Option<MssqlParser>,
 }
 
 #[derive(Default)]
@@ -460,6 +474,8 @@ impl FlowTable {
             Protocol::Syslog => drive_syslog(state, dir),
             Protocol::Amqp => drive_amqp(state, dir),
             Protocol::Kerberos => drive_kerberos(state, dir),
+            Protocol::Oracle => drive_oracle(state, dir),
+            Protocol::Mssql => drive_mssql(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -505,6 +521,8 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         514 | 601 | 6514 => return Protocol::Syslog,
         5672 | 5671 => return Protocol::Amqp,
         88 => return Protocol::Kerberos,
+        1521 | 1526 => return Protocol::Oracle,
+        1433 | 1434 => return Protocol::Mssql,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1435,6 +1453,52 @@ fn drive_kerberos(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Kerberos(Box::new(record)));
             }
             KerberosParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_oracle(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.oracle),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.oracle),
+    };
+    let parser = slot.get_or_insert_with(OracleParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            OracleParserOutput::Need => break,
+            OracleParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Oracle(Box::new(record)));
+            }
+            OracleParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_mssql(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.mssql),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.mssql),
+    };
+    let parser = slot.get_or_insert_with(MssqlParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            MssqlParserOutput::Need => break,
+            MssqlParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Mssql(Box::new(record)));
+            }
+            MssqlParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
