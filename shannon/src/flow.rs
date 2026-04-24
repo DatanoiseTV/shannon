@@ -25,6 +25,7 @@ use crate::parsers::{
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
     http1::{Http1Parser, ParsedRecord as Http1Record, ParserOutput as Http1Output},
     http2::{Http2Parser, Http2ParserOutput, Http2Record},
+    imap::{ImapParser, ImapParserOutput, ImapRecord},
     kafka::{KafkaParser, KafkaParserOutput, KafkaRecord},
     memcached::{McParserOutput, McRecord, MemcachedParser},
     mongodb::{MongoParser, MongoParserOutput, MongoRecord},
@@ -64,6 +65,7 @@ pub enum Protocol {
     WebSocket,
     Pop3,
     Smtp,
+    Imap,
     Bypass,
 }
 
@@ -85,6 +87,7 @@ impl Protocol {
             Self::WebSocket => "ws",
             Self::Pop3 => "pop3",
             Self::Smtp => "smtp",
+            Self::Imap => "imap",
             Self::Bypass => "-",
         }
     }
@@ -105,6 +108,7 @@ pub enum AnyRecord {
     WebSocket(Box<WsRecord>),
     Pop3(Box<Pop3Record>),
     Smtp(Box<SmtpRecord>),
+    Imap(Box<ImapRecord>),
 }
 
 impl AnyRecord {
@@ -124,6 +128,7 @@ impl AnyRecord {
             Self::WebSocket(_) => "ws",
             Self::Pop3(_) => "pop3",
             Self::Smtp(_) => "smtp",
+            Self::Imap(_) => "imap",
         }
     }
 
@@ -143,6 +148,7 @@ impl AnyRecord {
             Self::WebSocket(r) => r.display_line(),
             Self::Pop3(r) => r.display_line(),
             Self::Smtp(r) => r.display_line(),
+            Self::Imap(r) => r.display_line(),
         }
     }
 }
@@ -217,6 +223,7 @@ struct ParserSlot {
     websocket: Option<WebSocketParser>,
     pop3: Option<Pop3Parser>,
     smtp: Option<SmtpParser>,
+    imap: Option<ImapParser>,
 }
 
 #[derive(Default)]
@@ -284,6 +291,7 @@ impl FlowTable {
             Protocol::WebSocket => drive_websocket(state, dir),
             Protocol::Pop3 => drive_pop3(state, dir),
             Protocol::Smtp => drive_smtp(state, dir),
+            Protocol::Imap => drive_imap(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -307,6 +315,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         4222 | 6222 => return Protocol::Nats,
         110 | 995 => return Protocol::Pop3,
         25 | 465 | 587 | 2525 => return Protocol::Smtp,
+        143 | 993 => return Protocol::Imap,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -722,6 +731,29 @@ fn drive_smtp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Smtp(Box::new(record)));
             }
             SmtpParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_imap(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.imap),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.imap),
+    };
+    let parser = slot.get_or_insert_with(ImapParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            ImapParserOutput::Need => break,
+            ImapParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Imap(Box::new(record)));
+            }
+            ImapParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

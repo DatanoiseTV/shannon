@@ -17,6 +17,7 @@
 pub mod cassandra;
 pub mod http1;
 pub mod http2;
+pub mod imap;
 pub mod kafka;
 pub mod memcached;
 pub mod mongodb;
