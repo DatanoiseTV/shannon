@@ -39,16 +39,20 @@ use crate::parsers::{
     mqtt::{MqttParser, MqttParserOutput, MqttRecord},
     mysql::{MysqlParser, MysqlParserOutput, MysqlRecord},
     nats::{NatsParser, NatsParserOutput, NatsRecord},
+    ntp::{NtpParser, NtpParserOutput, NtpRecord},
     opcua::{OpcuaParser, OpcuaParserOutput, OpcuaRecord},
     pop3::{Pop3Parser, Pop3ParserOutput, Pop3Record},
     postgres::{PgParserOutput, PgRecord, PostgresParser},
+    radius::{RadiusParser, RadiusParserOutput, RadiusRecord},
     rdp::{RdpParser, RdpParserOutput, RdpRecord},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
     s7comm::{S7Parser, S7ParserOutput, S7Record},
     sip::{SipParser, SipParserOutput, SipRecord},
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
+    socks::{SocksParser, SocksParserOutput, SocksRecord},
     ssh::{SshParser, SshParserOutput, SshRecord},
     stun::{StunParser, StunParserOutput, StunRecord},
+    telnet::{TelnetParser, TelnetParserOutput, TelnetRecord},
     tls::{TlsParser, TlsParserOutput, TlsRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
 };
@@ -94,6 +98,10 @@ pub enum Protocol {
     Sip,
     Tls,
     Rdp,
+    Socks,
+    Telnet,
+    Ntp,
+    Radius,
     Bypass,
 }
 
@@ -130,6 +138,10 @@ impl Protocol {
             Self::Sip => "sip",
             Self::Tls => "tls",
             Self::Rdp => "rdp",
+            Self::Socks => "socks",
+            Self::Telnet => "telnet",
+            Self::Ntp => "ntp",
+            Self::Radius => "radius",
             Self::Bypass => "-",
         }
     }
@@ -165,6 +177,10 @@ pub enum AnyRecord {
     Sip(Box<SipRecord>),
     Tls(Box<TlsRecord>),
     Rdp(Box<RdpRecord>),
+    Socks(Box<SocksRecord>),
+    Telnet(Box<TelnetRecord>),
+    Ntp(Box<NtpRecord>),
+    Radius(Box<RadiusRecord>),
 }
 
 impl AnyRecord {
@@ -199,6 +215,10 @@ impl AnyRecord {
             Self::Sip(_) => "sip",
             Self::Tls(_) => "tls",
             Self::Rdp(_) => "rdp",
+            Self::Socks(_) => "socks",
+            Self::Telnet(_) => "telnet",
+            Self::Ntp(_) => "ntp",
+            Self::Radius(_) => "radius",
         }
     }
 
@@ -233,6 +253,10 @@ impl AnyRecord {
             Self::Sip(r) => r.display_line(),
             Self::Tls(r) => r.display_line(),
             Self::Rdp(r) => r.display_line(),
+            Self::Socks(r) => r.display_line(),
+            Self::Telnet(r) => r.display_line(),
+            Self::Ntp(r) => r.display_line(),
+            Self::Radius(r) => r.display_line(),
         }
     }
 }
@@ -322,6 +346,10 @@ struct ParserSlot {
     sip: Option<SipParser>,
     tls: Option<TlsParser>,
     rdp: Option<RdpParser>,
+    socks: Option<SocksParser>,
+    telnet: Option<TelnetParser>,
+    ntp: Option<NtpParser>,
+    radius: Option<RadiusParser>,
 }
 
 #[derive(Default)]
@@ -404,6 +432,10 @@ impl FlowTable {
             Protocol::Sip => drive_sip(state, dir),
             Protocol::Tls => drive_tls(state, dir),
             Protocol::Rdp => drive_rdp(state, dir),
+            Protocol::Socks => drive_socks(state, dir),
+            Protocol::Telnet => drive_telnet(state, dir),
+            Protocol::Ntp => drive_ntp(state, dir),
+            Protocol::Radius => drive_radius(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -442,6 +474,10 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         5060 | 5061 => return Protocol::Sip,
         443 | 8443 => return Protocol::Tls,
         3389 => return Protocol::Rdp,
+        1080 => return Protocol::Socks,
+        23 => return Protocol::Telnet,
+        123 => return Protocol::Ntp,
+        1812 | 1813 => return Protocol::Radius,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1211,6 +1247,98 @@ fn drive_rdp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Rdp(Box::new(record)));
             }
             RdpParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_socks(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.socks),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.socks),
+    };
+    let parser = slot.get_or_insert_with(SocksParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            SocksParserOutput::Need => break,
+            SocksParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Socks(Box::new(record)));
+            }
+            SocksParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_telnet(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.telnet),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.telnet),
+    };
+    let parser = slot.get_or_insert_with(TelnetParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            TelnetParserOutput::Need => break,
+            TelnetParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Telnet(Box::new(record)));
+            }
+            TelnetParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_ntp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.ntp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.ntp),
+    };
+    let parser = slot.get_or_insert_with(NtpParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            NtpParserOutput::Need => break,
+            NtpParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Ntp(Box::new(record)));
+            }
+            NtpParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_radius(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.radius),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.radius),
+    };
+    let parser = slot.get_or_insert_with(RadiusParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            RadiusParserOutput::Need => break,
+            RadiusParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Radius(Box::new(record)));
+            }
+            RadiusParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
