@@ -154,6 +154,8 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::Kerberos(k) => ("krb5", k.realm.clone()),
         AnyRecord::Oracle(o) => ("oracle", o.service_name.clone().or_else(|| o.sid.clone())),
         AnyRecord::Mssql(m) => ("mssql", m.database.clone().or_else(|| m.server_name.clone())),
+        AnyRecord::Dhcp(d) => ("dhcp", d.hostname.clone()),
+        AnyRecord::Tftp(_) => ("tftp", None),
     }
 }
 

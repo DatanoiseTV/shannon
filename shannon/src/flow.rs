@@ -25,6 +25,7 @@ use crate::parsers::{
     amqp::{AmqpParser, AmqpParserOutput, AmqpRecord},
     bacnet::{BacnetParser, BacnetParserOutput, BacnetRecord},
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
+    dhcp::{DhcpParser, DhcpParserOutput, DhcpRecord},
     dnp3::{Dnp3Parser, Dnp3ParserOutput, Dnp3Record},
     enip::{EnipParser, EnipParserOutput, EnipRecord},
     ftp::{FtpParser, FtpParserOutput, FtpRecord},
@@ -58,6 +59,7 @@ use crate::parsers::{
     stun::{StunParser, StunParserOutput, StunRecord},
     syslog::{SyslogParser, SyslogParserOutput, SyslogRecord},
     telnet::{TelnetParser, TelnetParserOutput, TelnetRecord},
+    tftp::{TftpParser, TftpParserOutput, TftpRecord},
     tls::{TlsParser, TlsParserOutput, TlsRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
 };
@@ -112,6 +114,8 @@ pub enum Protocol {
     Kerberos,
     Oracle,
     Mssql,
+    Dhcp,
+    Tftp,
     Bypass,
 }
 
@@ -157,6 +161,8 @@ impl Protocol {
             Self::Kerberos => "krb5",
             Self::Oracle => "oracle",
             Self::Mssql => "mssql",
+            Self::Dhcp => "dhcp",
+            Self::Tftp => "tftp",
             Self::Bypass => "-",
         }
     }
@@ -201,6 +207,8 @@ pub enum AnyRecord {
     Kerberos(Box<KerberosRecord>),
     Oracle(Box<OracleRecord>),
     Mssql(Box<MssqlRecord>),
+    Dhcp(Box<DhcpRecord>),
+    Tftp(Box<TftpRecord>),
 }
 
 impl AnyRecord {
@@ -244,6 +252,8 @@ impl AnyRecord {
             Self::Kerberos(_) => "krb5",
             Self::Oracle(_) => "oracle",
             Self::Mssql(_) => "mssql",
+            Self::Dhcp(_) => "dhcp",
+            Self::Tftp(_) => "tftp",
         }
     }
 
@@ -287,6 +297,8 @@ impl AnyRecord {
             Self::Kerberos(r) => r.display_line(),
             Self::Oracle(r) => r.display_line(),
             Self::Mssql(r) => r.display_line(),
+            Self::Dhcp(r) => r.display_line(),
+            Self::Tftp(r) => r.display_line(),
         }
     }
 }
@@ -385,6 +397,8 @@ struct ParserSlot {
     kerberos: Option<KerberosParser>,
     oracle: Option<OracleParser>,
     mssql: Option<MssqlParser>,
+    dhcp: Option<DhcpParser>,
+    tftp: Option<TftpParser>,
 }
 
 #[derive(Default)]
@@ -476,6 +490,8 @@ impl FlowTable {
             Protocol::Kerberos => drive_kerberos(state, dir),
             Protocol::Oracle => drive_oracle(state, dir),
             Protocol::Mssql => drive_mssql(state, dir),
+            Protocol::Dhcp => drive_dhcp(state, dir),
+            Protocol::Tftp => drive_tftp(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -523,6 +539,8 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         88 => return Protocol::Kerberos,
         1521 | 1526 => return Protocol::Oracle,
         1433 | 1434 => return Protocol::Mssql,
+        67 | 68 => return Protocol::Dhcp,
+        69 => return Protocol::Tftp,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1499,6 +1517,52 @@ fn drive_mssql(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Mssql(Box::new(record)));
             }
             MssqlParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_dhcp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.dhcp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.dhcp),
+    };
+    let parser = slot.get_or_insert_with(DhcpParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            DhcpParserOutput::Need => break,
+            DhcpParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Dhcp(Box::new(record)));
+            }
+            DhcpParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_tftp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.tftp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.tftp),
+    };
+    let parser = slot.get_or_insert_with(TftpParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            TftpParserOutput::Need => break,
+            TftpParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Tftp(Box::new(record)));
+            }
+            TftpParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

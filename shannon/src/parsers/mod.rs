@@ -17,6 +17,7 @@
 pub mod amqp;
 pub mod bacnet;
 pub mod cassandra;
+pub mod dhcp;
 pub mod dnp3;
 pub mod dns;
 pub mod enip;
@@ -52,6 +53,7 @@ pub mod ssh;
 pub mod stun;
 pub mod syslog;
 pub mod telnet;
+pub mod tftp;
 pub mod tls;
 pub mod websocket;
 
