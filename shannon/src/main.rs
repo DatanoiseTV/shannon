@@ -9,6 +9,7 @@
 #![allow(dead_code)]
 
 mod api_catalog;
+mod ask_tools;
 mod aws;
 mod cert_dump;
 mod cli;
@@ -21,6 +22,7 @@ mod events;
 mod file_dump;
 mod flow;
 mod llm;
+mod llm_client;
 mod logging;
 mod parsers;
 mod pcap;
@@ -74,6 +76,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Top(args) => commands::top::run(&cli, args),
         Command::Record(args) => commands::record::run(&cli, args),
         Command::Analyze(args) => commands::analyze::run(&cli, args),
+        Command::Ask(args) => commands::ask::run(&cli, args),
         Command::Doctor => doctor::run(&cli),
         Command::Completions(args) => cli::print_completions(args.shell),
         Command::Version => {

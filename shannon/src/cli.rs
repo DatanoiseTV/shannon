@@ -68,6 +68,8 @@ pub enum Command {
     Record(RecordArgs),
     /// Summarise a recording.
     Analyze(AnalyzeArgs),
+    /// Ask a question about observed traffic via a local LLM with tool-use.
+    Ask(AskArgs),
     /// Diagnose environment (kernel, BTF, privileges, libssl).
     Doctor,
     /// Generate shell completions.
@@ -422,6 +424,36 @@ pub struct AnalyzeArgs {
     /// How many top endpoints / peers to show.
     #[arg(long, default_value_t = 20)]
     pub depth: u32,
+}
+
+#[derive(Args, Clone, Debug, Default)]
+pub struct AskArgs {
+    /// Free-form question. Run against a loaded catalog via an
+    /// OpenAI-compatible LLM server (Ollama / LM Studio / vLLM / ...).
+    pub question: String,
+
+    /// Saved catalog file produced by `shannon trace --catalog FILE`.
+    #[arg(long, value_name = "PATH")]
+    pub catalog: Option<PathBuf>,
+
+    /// Events JSONL file (produced by `shannon record`). Enables the
+    /// `search_events` tool.
+    #[arg(long, value_name = "PATH")]
+    pub events: Option<PathBuf>,
+
+    /// Endpoint shortcut (`ollama`, `lmstudio`) or a full base URL.
+    /// Default: `ollama` (http://localhost:11434/v1).
+    #[arg(long)]
+    pub endpoint: Option<String>,
+
+    /// Model name to request. For Ollama this must be a pulled model
+    /// (e.g. `llama3.2`); for LM Studio the currently-loaded model.
+    #[arg(long, default_value = "llama3.2")]
+    pub model: String,
+
+    /// Bearer token for non-local providers (OpenAI, Azure).
+    #[arg(long, env = "SHANNON_ASK_API_KEY")]
+    pub api_key: Option<String>,
 }
 
 #[derive(Args, Clone, Debug)]
