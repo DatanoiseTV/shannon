@@ -377,6 +377,9 @@ pub struct MapArgs {
 pub enum MapFormat {
     #[default]
     Table,
+    /// ratatui-driven interactive view: scroll, sort, quit. Same edge
+    /// data as `table`, just paginated and key-driven.
+    Tui,
     Json,
     Dot,
 }

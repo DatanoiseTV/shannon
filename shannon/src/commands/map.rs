@@ -7,6 +7,8 @@
 //!
 //!   - `table` (default): redraws an ANSI-cleared table every
 //!     `--interval`, sorted by recent activity.
+//!   - `tui`: ratatui-driven interactive view with scrollable rows,
+//!     sort toggles, and quit on `q` / `Ctrl+C`.
 //!   - `dot`: emits a Graphviz DOT graph on every tick, suitable
 //!     for piping through `dot -Tsvg`.
 //!   - `json`: newline-delimited JSON edges for scripting.
@@ -17,11 +19,24 @@
 //! shown in the graph.
 
 use std::collections::BTreeMap;
-use std::io::{IsTerminal, Write};
+use std::io::{self, IsTerminal, Write};
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use crossterm::{
+    event::{self as cterm_event, Event as CEvent, KeyCode, KeyEvent, KeyModifiers},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    Terminal,
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction as LayoutDirection, Layout},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
+};
 use tokio::signal;
 
 use crate::cli::{Cli, MapArgs, MapFormat};
@@ -41,16 +56,32 @@ async fn run_async(args: MapArgs) -> Result<()> {
         follow_children: args.filter.follow_children,
     };
     let mut runtime = Runtime::start_with(&filter)?;
-    let mut flows = FlowTable::default();
+    let flows = FlowTable::default();
     let dns = DnsCache::new();
-    let mut map = ServiceMap::default();
+    let map = ServiceMap::default();
 
-    let tty = std::io::stdout().is_terminal() && matches!(args.format, MapFormat::Table);
-    let mut out = std::io::stdout().lock();
+    match args.format {
+        MapFormat::Tui => run_tui(&args, runtime, flows, dns, map).await,
+        _ => run_periodic(&args, &mut runtime, flows, dns, map).await,
+    }
+}
+
+/// Periodic-redraw path — the `table`, `json`, `dot` formats all
+/// share this loop; they differ only in the writer invoked by
+/// [`render`].
+async fn run_periodic(
+    args: &MapArgs,
+    runtime: &mut Runtime,
+    mut flows: FlowTable,
+    dns: DnsCache,
+    mut map: ServiceMap,
+) -> Result<()> {
+    let tty = io::stdout().is_terminal() && matches!(args.format, MapFormat::Table);
+    let mut out = io::stdout().lock();
 
     let interval = args.interval;
     let mut last_tick = Instant::now();
-    render(&mut out, &map, &args, tty)?;
+    render(&mut out, &map, args, tty)?;
 
     loop {
         let deadline = tokio::time::sleep(interval.saturating_sub(last_tick.elapsed()));
@@ -58,7 +89,7 @@ async fn run_async(args: MapArgs) -> Result<()> {
         tokio::select! {
             _ = signal::ctrl_c() => break,
             _ = &mut deadline => {
-                render(&mut out, &map, &args, tty)?;
+                render(&mut out, &map, args, tty)?;
                 last_tick = Instant::now();
             }
             maybe = runtime.events_rx.recv() => match maybe {
@@ -67,7 +98,7 @@ async fn run_async(args: MapArgs) -> Result<()> {
             }
         }
     }
-    render(&mut out, &map, &args, tty)?;
+    render(&mut out, &map, args, tty)?;
     Ok(())
 }
 
@@ -290,11 +321,14 @@ fn render(
     map: &ServiceMap,
     args: &MapArgs,
     tty: bool,
-) -> std::io::Result<()> {
+) -> io::Result<()> {
     match args.format {
         MapFormat::Table => render_table(out, map, args.depth, tty),
         MapFormat::Json => render_json(out, map),
         MapFormat::Dot => render_dot(out, map),
+        // Tui owns its own loop (see `run_tui`) so it never hits
+        // this periodic-render path.
+        MapFormat::Tui => Ok(()),
     }
 }
 
@@ -303,7 +337,7 @@ fn render_table(
     map: &ServiceMap,
     depth: u32,
     tty: bool,
-) -> std::io::Result<()> {
+) -> io::Result<()> {
     if tty {
         write!(out, "\x1b[2J\x1b[H")?;
     }
@@ -346,7 +380,7 @@ fn render_table(
     out.flush()
 }
 
-fn render_json(out: &mut impl Write, map: &ServiceMap) -> std::io::Result<()> {
+fn render_json(out: &mut impl Write, map: &ServiceMap) -> io::Result<()> {
     for (key, edge) in &map.edges {
         writeln!(
             out,
@@ -368,7 +402,7 @@ fn render_json(out: &mut impl Write, map: &ServiceMap) -> std::io::Result<()> {
     out.flush()
 }
 
-fn render_dot(out: &mut impl Write, map: &ServiceMap) -> std::io::Result<()> {
+fn render_dot(out: &mut impl Write, map: &ServiceMap) -> io::Result<()> {
     writeln!(out, "digraph shannon {{")?;
     writeln!(out, "  rankdir=LR;")?;
     writeln!(out, "  node [shape=box, fontname=\"Menlo\"];")?;
@@ -470,4 +504,319 @@ fn format_age(d: Duration) -> String {
     } else {
         format!("{}h", s / 3600)
     }
+}
+
+// ---------------------------------------------------------------------------
+// TUI mode
+// ---------------------------------------------------------------------------
+
+/// Interactive ratatui loop. Scroll rows with ↑/↓ / PgUp / PgDn,
+/// cycle the sort column with `s`, toggle ascending/descending with
+/// `r`, quit with `q` / `Esc` / `Ctrl+C`.
+async fn run_tui(
+    args: &MapArgs,
+    mut runtime: Runtime,
+    mut flows: FlowTable,
+    dns: DnsCache,
+    mut map: ServiceMap,
+) -> Result<()> {
+    let mut terminal = setup_tui_terminal()?;
+    let mut ui = TuiState::new(args.depth as usize);
+
+    let tick = args.interval.min(Duration::from_millis(500));
+    let mut last_draw = Instant::now();
+
+    let res = loop {
+        // Draw only every `tick` so a firehose of events doesn't
+        // starve the UI.
+        if last_draw.elapsed() >= tick {
+            terminal.draw(|f| draw_tui(f, &map, &ui))?;
+            last_draw = Instant::now();
+        }
+
+        // Drain input without blocking — one quit key is enough to
+        // exit.
+        while cterm_event::poll(Duration::from_millis(0))? {
+            if let CEvent::Key(k) = cterm_event::read()? {
+                match handle_tui_key(&mut ui, k, map.edges.len()) {
+                    KeyResult::Quit => {
+                        break_outer(&mut terminal, &map, &ui)?;
+                        return Ok(());
+                    }
+                    KeyResult::Continue => {}
+                }
+            }
+        }
+
+        let deadline = tokio::time::sleep(tick);
+        tokio::pin!(deadline);
+        tokio::select! {
+            _ = signal::ctrl_c() => break Ok::<_, anyhow::Error>(()),
+            _ = &mut deadline => {}
+            maybe = runtime.events_rx.recv() => match maybe {
+                Some(ev) => absorb(&mut map, &mut flows, &dns, &ev),
+                None => break Ok(()),
+            }
+        }
+    };
+
+    restore_tui_terminal(&mut terminal)?;
+    res
+}
+
+fn break_outer(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    _map: &ServiceMap,
+    _ui: &TuiState,
+) -> Result<()> {
+    restore_tui_terminal(terminal)
+}
+
+fn setup_tui_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    Ok(Terminal::new(CrosstermBackend::new(stdout))?)
+}
+
+fn restore_tui_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    disable_raw_mode().ok();
+    execute!(terminal.backend_mut(), LeaveAlternateScreen).ok();
+    terminal.show_cursor().ok();
+    Ok(())
+}
+
+enum KeyResult {
+    Continue,
+    Quit,
+}
+
+fn handle_tui_key(ui: &mut TuiState, k: KeyEvent, row_count: usize) -> KeyResult {
+    match (k.code, k.modifiers) {
+        (KeyCode::Char('q'), _) | (KeyCode::Esc, _) => KeyResult::Quit,
+        (KeyCode::Char('c'), KeyModifiers::CONTROL) => KeyResult::Quit,
+        (KeyCode::Char('s'), _) => {
+            ui.sort = ui.sort.next();
+            KeyResult::Continue
+        }
+        (KeyCode::Char('r'), _) => {
+            ui.desc = !ui.desc;
+            KeyResult::Continue
+        }
+        (KeyCode::Up, _) => {
+            let cur = ui.table_state.selected().unwrap_or(0);
+            ui.table_state.select(Some(cur.saturating_sub(1)));
+            KeyResult::Continue
+        }
+        (KeyCode::Down, _) => {
+            let cur = ui.table_state.selected().unwrap_or(0);
+            let next = (cur + 1).min(row_count.saturating_sub(1));
+            ui.table_state.select(Some(next));
+            KeyResult::Continue
+        }
+        (KeyCode::PageUp, _) => {
+            let cur = ui.table_state.selected().unwrap_or(0);
+            ui.table_state.select(Some(cur.saturating_sub(10)));
+            KeyResult::Continue
+        }
+        (KeyCode::PageDown, _) => {
+            let cur = ui.table_state.selected().unwrap_or(0);
+            let next = (cur + 10).min(row_count.saturating_sub(1));
+            ui.table_state.select(Some(next));
+            KeyResult::Continue
+        }
+        _ => KeyResult::Continue,
+    }
+}
+
+struct TuiState {
+    table_state: TableState,
+    sort: TuiSort,
+    desc: bool,
+    /// Upper bound on visible rows (from `--depth`).
+    depth: usize,
+}
+
+impl TuiState {
+    fn new(depth: usize) -> Self {
+        let mut st = TableState::default();
+        st.select(Some(0));
+        Self { table_state: st, sort: TuiSort::LastSeen, desc: true, depth }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum TuiSort {
+    LastSeen,
+    Calls,
+    Bytes,
+    Proto,
+    Peer,
+}
+
+impl TuiSort {
+    const fn next(self) -> Self {
+        match self {
+            Self::LastSeen => Self::Calls,
+            Self::Calls => Self::Bytes,
+            Self::Bytes => Self::Proto,
+            Self::Proto => Self::Peer,
+            Self::Peer => Self::LastSeen,
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::LastSeen => "last-seen",
+            Self::Calls => "calls",
+            Self::Bytes => "bytes",
+            Self::Proto => "proto",
+            Self::Peer => "peer",
+        }
+    }
+}
+
+fn draw_tui(
+    f: &mut ratatui::Frame<'_>,
+    map: &ServiceMap,
+    ui: &TuiState,
+) {
+    let area = f.area();
+    let chunks = Layout::default()
+        .direction(LayoutDirection::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    // Header.
+    let by_proto = protocol_histogram(map);
+    let header = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled(
+                "shannon map",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(format!("   edges={}   sort={} {}   ",
+                map.edges.len(),
+                ui.sort.label(),
+                if ui.desc { "↓" } else { "↑" },
+            )),
+            Span::raw(by_proto),
+        ]),
+        Line::from(Span::styled(
+            " pid     comm             proto    peer                                     calls       tx         rx     age",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ])
+    .block(Block::default().borders(Borders::BOTTOM));
+
+    f.render_widget(header, chunks[0]);
+
+    // Table body.
+    let mut rows: Vec<(&EdgeKey, &Edge)> = map.edges.iter().collect();
+    sort_rows(&mut rows, ui.sort, ui.desc);
+    let rows = rows.into_iter().take(ui.depth).collect::<Vec<_>>();
+    let now = Instant::now();
+    let table_rows: Vec<Row<'_>> = rows
+        .iter()
+        .map(|(key, edge)| {
+            let peer = match edge.peer_label.as_deref() {
+                Some(s) => format!("{s} [{}:{}]", key.peer_addr, key.peer_port),
+                None => format!("{}:{}", key.peer_addr, key.peer_port),
+            };
+            let age = now.saturating_duration_since(edge.last_seen);
+            Row::new(vec![
+                Cell::from(format!("{:>7}", key.pid)),
+                Cell::from(truncate(&edge.comm, 16)),
+                Cell::from(edge.protocol).style(proto_colour(edge.protocol)),
+                Cell::from(truncate(&peer, 40)),
+                Cell::from(format!("{:>6}", edge.calls)),
+                Cell::from(format!("{:>10}", humanise(edge.tx_bytes))),
+                Cell::from(format!("{:>10}", humanise(edge.rx_bytes))),
+                Cell::from(format!("{:>6}", format_age(age))),
+            ])
+        })
+        .collect();
+
+    let widths = [
+        Constraint::Length(8),
+        Constraint::Length(16),
+        Constraint::Length(8),
+        Constraint::Length(40),
+        Constraint::Length(7),
+        Constraint::Length(11),
+        Constraint::Length(11),
+        Constraint::Length(7),
+    ];
+    let table = Table::new(table_rows, widths).row_highlight_style(
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    );
+
+    // Render with a mutable state clone since we can't borrow ui
+    // mutably through &ui.
+    let mut local_state = ui.table_state.clone();
+    f.render_stateful_widget(table, chunks[1], &mut local_state);
+
+    // Footer.
+    let footer = Paragraph::new(Span::styled(
+        " q quit · s cycle sort · r reverse · ↑/↓ select · PgUp/PgDn jump 10",
+        Style::default().fg(Color::DarkGray),
+    ));
+    f.render_widget(footer, chunks[2]);
+}
+
+fn protocol_histogram(map: &ServiceMap) -> String {
+    let mut counts: BTreeMap<&str, u64> = BTreeMap::new();
+    for (_, edge) in &map.edges {
+        *counts.entry(edge.protocol).or_default() += edge.calls.max(1);
+    }
+    counts
+        .into_iter()
+        .map(|(p, n)| format!("{p}={n}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn sort_rows(rows: &mut Vec<(&EdgeKey, &Edge)>, sort: TuiSort, desc: bool) {
+    match sort {
+        TuiSort::LastSeen => rows.sort_by(|a, b| b.1.last_seen.cmp(&a.1.last_seen)),
+        TuiSort::Calls => rows.sort_by(|a, b| b.1.calls.cmp(&a.1.calls)),
+        TuiSort::Bytes => rows.sort_by(|a, b| {
+            (b.1.tx_bytes + b.1.rx_bytes).cmp(&(a.1.tx_bytes + a.1.rx_bytes))
+        }),
+        TuiSort::Proto => rows.sort_by(|a, b| a.1.protocol.cmp(b.1.protocol)),
+        TuiSort::Peer => rows.sort_by(|a, b| {
+            a.1.peer_label
+                .as_deref()
+                .unwrap_or("")
+                .cmp(b.1.peer_label.as_deref().unwrap_or(""))
+        }),
+    }
+    if !desc && matches!(sort, TuiSort::LastSeen | TuiSort::Calls | TuiSort::Bytes) {
+        rows.reverse();
+    }
+}
+
+fn proto_colour(p: &str) -> Style {
+    let c = match p {
+        "http" | "h2" => Color::Green,
+        "tls" => Color::Magenta,
+        "dns" | "mdns" => Color::Cyan,
+        "pg" | "mysql" | "mongo" | "redis" | "oracle" | "mssql" | "cql" | "memcached" => Color::Yellow,
+        "kafka" | "nats" | "mqtt" | "amqp" | "stun" | "sip" | "rtsp" | "smpp" => Color::Blue,
+        "ssh" | "ftp" | "rdp" | "socks" | "telnet" | "irc" => Color::Red,
+        "modbus" | "s7" | "enip" | "dnp3" | "iec104" | "opcua" | "bacnet" => Color::LightYellow,
+        "ntp" | "radius" | "tacacs+" | "snmp" | "dhcp" | "tftp" | "syslog" | "krb5" | "ldap" => Color::LightBlue,
+        "smb" | "nfs" | "wg" => Color::LightMagenta,
+        _ => Color::White,
+    };
+    Style::default().fg(c)
 }

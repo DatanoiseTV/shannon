@@ -29,13 +29,14 @@ sudo shannon trace -p 1234 --protocol postgres
 sudo shannon top --sort p99
 
 # service-map: who talks to whom, by protocol
-sudo shannon map
+sudo shannon map                                          # ANSI-redrawn table
+sudo shannon map --format tui                             # ratatui: scroll, sort, quit
+sudo shannon map --format dot | dot -Tsvg > map.svg
+sudo shannon map --format json > edges.ndjson
 
 # trace + dump every X.509 seen on the wire, flag self-signed / weak
 # sig-alg / short RSA / expired / long-validity anomalies inline
 sudo shannon trace --dump-certs /tmp/shannon-certs
-sudo shannon map --format dot | dot -Tsvg > map.svg
-sudo shannon map --format json > edges.ndjson
 
 # pre-flight: is this box supported?
 shannon doctor
