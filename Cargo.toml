@@ -19,9 +19,10 @@ categories   = ["command-line-utilities", "network-programming"]
 unsafe_op_in_unsafe_fn        = "deny"
 rust_2018_idioms              = { level = "warn", priority = -1 }
 missing_debug_implementations = "warn"
-unreachable_pub               = "warn"
 unused_lifetimes              = "warn"
 unused_qualifications         = "warn"
+# `unreachable_pub` is noisy in binary crates; enable only in library crates
+# via their own `#![warn(unreachable_pub)]` if desired.
 
 [workspace.lints.clippy]
 pedantic                 = { level = "warn", priority = -1 }

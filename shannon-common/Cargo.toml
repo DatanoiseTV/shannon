@@ -21,8 +21,5 @@ std     = []
 # std-only conveniences (serde, display impls) live behind `feature = "std"`.
 serde = { workspace = true, optional = true }
 
-[features.full]
-values = []
-
 [lints]
 workspace = true

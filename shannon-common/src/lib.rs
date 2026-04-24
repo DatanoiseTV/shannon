@@ -20,8 +20,9 @@
 pub const ABI_VERSION: u8 = 1;
 
 /// Fixed header size. Placed up front so the userspace side can demultiplex
-/// events without first matching on [`EventKind`].
-pub const HEADER_SIZE: usize = 80;
+/// events without first matching on [`EventKind`]. Checked at compile time
+/// against `size_of::<EventHeader>()` below.
+pub const HEADER_SIZE: usize = 72;
 
 /// Maximum bytes of a TCP payload we forward from the kernel per event.
 /// Chosen as a balance between ring-buffer bandwidth and parser fidelity —
@@ -237,7 +238,8 @@ pub struct EventHeader {
     pub comm: [u8; COMM_LEN],
 }
 
-const _HEADER_SIZE_CHECK: [(); HEADER_SIZE] = [(); core::mem::size_of::<EventHeader>()];
+#[allow(unused_qualifications)]
+const _HEADER_SIZE_CHECK: [(); HEADER_SIZE] = [(); size_of::<EventHeader>()];
 
 impl EventHeader {
     /// Return the `comm` field as a byte slice trimmed of trailing NUL bytes.

@@ -4,6 +4,9 @@
 //! handlers. All real logic lives in sibling modules.
 
 #![forbid(unsafe_op_in_unsafe_fn)]
+// Binary-crate conveniences: these let wiring go in incrementally without
+// fighting the default lint set while modules are still being connected up.
+#![allow(dead_code)]
 
 mod cli;
 mod commands;
