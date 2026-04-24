@@ -286,6 +286,13 @@ pub struct TraceArgs {
     #[arg(long = "pcap", value_name = "FILE")]
     pub pcap_file: Option<PathBuf>,
 
+    /// Extract X.509 certificates from observed TLS handshakes and save
+    /// them in this directory as `<sha256-prefix>.der` plus a `.txt`
+    /// summary with subject CN, issuer CN, SAN count, validity window,
+    /// and full SHA-256 fingerprint.
+    #[arg(long = "dump-certs", value_name = "DIR")]
+    pub dump_certs_dir: Option<PathBuf>,
+
     #[command(flatten)]
     pub filter: FilterArgs,
 }

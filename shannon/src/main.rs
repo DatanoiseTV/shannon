@@ -9,6 +9,7 @@
 #![allow(dead_code)]
 
 mod api_catalog;
+mod cert_dump;
 mod cli;
 mod commands;
 mod config;

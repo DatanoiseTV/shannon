@@ -9,6 +9,7 @@ use anyhow::Result;
 use tokio::signal;
 
 use crate::api_catalog::{ApiCatalog, Http1Fact, Http2Fact};
+use crate::cert_dump::CertDumper;
 use crate::cli::{Cli, TraceArgs};
 use crate::dns_cache::DnsCache;
 use crate::events::{DecodedEvent, Direction};
@@ -55,6 +56,13 @@ async fn run_async(args: TraceArgs) -> Result<()> {
         None => None,
     };
 
+    // Certificate dumper — extracts X.509 certs from TLS handshakes in
+    // TCP streams and saves to disk.
+    let mut cert_dumper = match args.dump_certs_dir.as_ref() {
+        Some(p) => Some(CertDumper::open(p)?),
+        None => None,
+    };
+
     banner(&args, &filter);
     loop {
         tokio::select! {
@@ -62,7 +70,8 @@ async fn run_async(args: TraceArgs) -> Result<()> {
             maybe = runtime.events_rx.recv() => match maybe {
                 Some(ev) => handle_event(
                     &mut out, &mut flows, &dns, catalog.as_deref(),
-                    dumper.as_mut(), pcap.as_mut(), &args, &ev, color,
+                    dumper.as_mut(), pcap.as_mut(), cert_dumper.as_mut(),
+                    &args, &ev, color,
                 )?,
                 None => break,
             }
@@ -75,6 +84,9 @@ async fn run_async(args: TraceArgs) -> Result<()> {
         let n = pw.packets();
         pw.flush()?;
         eprintln!("shannon: wrote {n} packet(s) to pcap");
+    }
+    if let Some(c) = cert_dumper.as_ref() {
+        eprintln!("shannon: saved {} certificate(s)", c.count());
     }
 
     if let (Some(cat), Some(path)) = (catalog.as_ref(), args.catalog_file.as_ref()) {
@@ -123,6 +135,7 @@ fn handle_event(
     catalog: Option<&ApiCatalog>,
     dumper: Option<&mut FileDumper>,
     pcap: Option<&mut PcapWriter>,
+    cert_dumper: Option<&mut CertDumper>,
     args: &TraceArgs,
     ev: &DecodedEvent,
     color: bool,
@@ -141,6 +154,22 @@ fn handle_event(
                 };
                 let _ =
                     pw.write_segment(d.src.0, d.src.1, d.dst.0, d.dst.1, dir, &d.data);
+            }
+            if let Some(cd) = cert_dumper {
+                for summary in cd.observe(&d.data) {
+                    writeln!(
+                        out,
+                        "{}  🔐 cert  subject={}  issuer={}  san={}  valid {} → {}  fp={}  -> {}",
+                        wall_clock(),
+                        summary.subject_cn,
+                        summary.issuer_cn,
+                        summary.san_count,
+                        summary.not_before,
+                        summary.not_after,
+                        summary.fingerprint_prefix,
+                        summary.saved_path.display(),
+                    )?;
+                }
             }
             let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
             flows.hint_port(key.clone(), d.dst.1);
