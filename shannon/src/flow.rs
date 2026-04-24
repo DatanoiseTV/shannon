@@ -45,6 +45,7 @@ use crate::parsers::{
     s7comm::{S7Parser, S7ParserOutput, S7Record},
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
     ssh::{SshParser, SshParserOutput, SshRecord},
+    stun::{StunParser, StunParserOutput, StunRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
 };
 
@@ -84,6 +85,7 @@ pub enum Protocol {
     S7,
     Enip,
     Bacnet,
+    Stun,
     Bypass,
 }
 
@@ -115,6 +117,7 @@ impl Protocol {
             Self::S7 => "s7",
             Self::Enip => "enip",
             Self::Bacnet => "bacnet",
+            Self::Stun => "stun",
             Self::Bypass => "-",
         }
     }
@@ -145,6 +148,7 @@ pub enum AnyRecord {
     S7(Box<S7Record>),
     Enip(Box<EnipRecord>),
     Bacnet(Box<BacnetRecord>),
+    Stun(Box<StunRecord>),
 }
 
 impl AnyRecord {
@@ -174,6 +178,7 @@ impl AnyRecord {
             Self::S7(_) => "s7",
             Self::Enip(_) => "enip",
             Self::Bacnet(_) => "bacnet",
+            Self::Stun(_) => "stun",
         }
     }
 
@@ -203,6 +208,7 @@ impl AnyRecord {
             Self::S7(r) => r.display_line(),
             Self::Enip(r) => r.display_line(),
             Self::Bacnet(r) => r.display_line(),
+            Self::Stun(r) => r.display_line(),
         }
     }
 }
@@ -287,6 +293,7 @@ struct ParserSlot {
     s7: Option<S7Parser>,
     enip: Option<EnipParser>,
     bacnet: Option<BacnetParser>,
+    stun: Option<StunParser>,
 }
 
 #[derive(Default)]
@@ -364,6 +371,7 @@ impl FlowTable {
             Protocol::S7 => drive_s7(state, dir),
             Protocol::Enip => drive_enip(state, dir),
             Protocol::Bacnet => drive_bacnet(state, dir),
+            Protocol::Stun => drive_stun(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -397,6 +405,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         102 => return Protocol::S7,
         44818 | 2222 => return Protocol::Enip,
         47808 | 47809 => return Protocol::Bacnet,
+        3478 | 5349 => return Protocol::Stun,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1042,6 +1051,29 @@ fn drive_bacnet(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Bacnet(Box::new(record)));
             }
             BacnetParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_stun(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.stun),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.stun),
+    };
+    let parser = slot.get_or_insert_with(StunParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            StunParserOutput::Need => break,
+            StunParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Stun(Box::new(record)));
+            }
+            StunParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

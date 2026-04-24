@@ -39,6 +39,7 @@ pub mod s7comm;
 pub mod smtp;
 pub mod ssdp;
 pub mod ssh;
+pub mod stun;
 pub mod websocket;
 
 // No re-exports from here — each parser's symbols are accessed via its
