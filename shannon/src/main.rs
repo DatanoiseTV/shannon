@@ -17,6 +17,7 @@ mod events;
 mod flow;
 mod logging;
 mod parsers;
+mod proto;
 mod runtime;
 mod secrets;
 
