@@ -328,7 +328,7 @@ fn find_iban(text: &str) -> bool {
 // Minimal base64 decoder for the Basic-auth path.
 // ---------------------------------------------------------------------------
 
-fn base64_decode(input: &str) -> Option<Vec<u8>> {
+pub fn base64_decode(input: &str) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(input.len() * 3 / 4);
     let mut buf = 0u32;
     let mut bits = 0u32;

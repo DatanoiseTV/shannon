@@ -264,7 +264,8 @@ fn dispatch_records(
                 if let Some(op) = crate::graphql::classify(ct, &hr.body) {
                     writeln!(out, "{}  ◈  {}", wall_clock(), op.display_line())?;
                 }
-                // Default-credential warning on Authorization: Basic.
+                // Default-credential warning on Authorization: Basic
+                // + NTLM-step inspection on Authorization: NTLM.
                 if let Some(auth) = hr
                     .headers
                     .iter()
@@ -281,6 +282,20 @@ fn dispatch_records(
                                 w.detail,
                                 w.severity
                             )?;
+                        }
+                    }
+                    if let Some(ntlm_b64) =
+                        auth.strip_prefix("NTLM ").or_else(|| auth.strip_prefix("Negotiate "))
+                    {
+                        if let Some(decoded) = warnings::base64_decode(ntlm_b64) {
+                            if let Some(f) = crate::ntlm::classify(&decoded) {
+                                writeln!(
+                                    out,
+                                    "{}  🪟 {}",
+                                    wall_clock(),
+                                    f.display_line()
+                                )?;
+                            }
                         }
                     }
                 }
@@ -317,6 +332,22 @@ fn scan_and_warn(
             pid,
             truncate(comm, 15),
             f.sample,
+        )?;
+    }
+    // NTLM authentication payloads can ride SMB SessionSetup,
+    // LDAP SASL GSS-SPNEGO, custom TCP services — anywhere bytes
+    // include the NTLMSSP magic. Same scan here so the operator
+    // sees the signal without needing the L7 parser of the
+    // moment to know about NTLM.
+    if let Some(f) = crate::ntlm::classify(bytes) {
+        writeln!(
+            out,
+            "{}  🪟 [{}] {} pid={} comm={:<15}",
+            wall_clock(),
+            layer,
+            f.display_line(),
+            pid,
+            truncate(comm, 15),
         )?;
     }
     Ok(())

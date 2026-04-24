@@ -104,6 +104,7 @@ and legacy chat.
 | gRPC | On HTTP/2: service, method, status; body decode with `--proto` |
 | GraphQL | On HTTP: operation name + root field (query / mutation / subscription) |
 | LLM APIs | OpenAI / Anthropic (incl. `/v1/messages/count_tokens` Claude Code uses) / Gemini / Azure / Bedrock / Ollama / OpenAI-compat — provider, endpoint, model, streaming-mode, prompt-bytes |
+| NTLM | Type 1 / 2 / 3 (Negotiate / Challenge / Authenticate); user + domain + workstation in cleartext; works inside HTTP `Authorization: NTLM/Negotiate`, SMB SessionSetup, LDAP SASL GSS-SPNEGO |
 | WebSocket | RFC 6455 frames; follows HTTP/1.1 `101 Upgrade` handshake |
 | Socket.IO / Engine.IO | Event name, namespace, JSON args, ack IDs |
 | TLS 1.0-1.3 | ClientHello / ServerHello SNI + ALPN + cipher-suite inspection; ServerHello warnings for legacy versions, NULL / EXPORT / RC4 / 3DES / CBC-SHA1 / anon-DH ciphers |

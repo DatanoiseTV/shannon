@@ -23,6 +23,7 @@ mod file_dump;
 mod flow;
 mod graphql;
 mod llm;
+mod ntlm;
 mod llm_client;
 mod logging;
 mod parsers;
