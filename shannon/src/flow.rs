@@ -22,6 +22,7 @@ use std::collections::HashMap;
 
 use crate::events::Direction;
 use crate::parsers::{
+    bacnet::{BacnetParser, BacnetParserOutput, BacnetRecord},
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
     dnp3::{Dnp3Parser, Dnp3ParserOutput, Dnp3Record},
     enip::{EnipParser, EnipParserOutput, EnipRecord},
@@ -82,6 +83,7 @@ pub enum Protocol {
     Dnp3,
     S7,
     Enip,
+    Bacnet,
     Bypass,
 }
 
@@ -112,6 +114,7 @@ impl Protocol {
             Self::Dnp3 => "dnp3",
             Self::S7 => "s7",
             Self::Enip => "enip",
+            Self::Bacnet => "bacnet",
             Self::Bypass => "-",
         }
     }
@@ -141,6 +144,7 @@ pub enum AnyRecord {
     Dnp3(Box<Dnp3Record>),
     S7(Box<S7Record>),
     Enip(Box<EnipRecord>),
+    Bacnet(Box<BacnetRecord>),
 }
 
 impl AnyRecord {
@@ -169,6 +173,7 @@ impl AnyRecord {
             Self::Dnp3(_) => "dnp3",
             Self::S7(_) => "s7",
             Self::Enip(_) => "enip",
+            Self::Bacnet(_) => "bacnet",
         }
     }
 
@@ -197,6 +202,7 @@ impl AnyRecord {
             Self::Dnp3(r) => r.display_line(),
             Self::S7(r) => r.display_line(),
             Self::Enip(r) => r.display_line(),
+            Self::Bacnet(r) => r.display_line(),
         }
     }
 }
@@ -280,6 +286,7 @@ struct ParserSlot {
     dnp3: Option<Dnp3Parser>,
     s7: Option<S7Parser>,
     enip: Option<EnipParser>,
+    bacnet: Option<BacnetParser>,
 }
 
 #[derive(Default)]
@@ -356,6 +363,7 @@ impl FlowTable {
             Protocol::Dnp3 => drive_dnp3(state, dir),
             Protocol::S7 => drive_s7(state, dir),
             Protocol::Enip => drive_enip(state, dir),
+            Protocol::Bacnet => drive_bacnet(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -388,6 +396,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         20000 => return Protocol::Dnp3,
         102 => return Protocol::S7,
         44818 | 2222 => return Protocol::Enip,
+        47808 | 47809 => return Protocol::Bacnet,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1010,6 +1019,29 @@ fn drive_enip(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Enip(Box::new(record)));
             }
             EnipParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_bacnet(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.bacnet),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.bacnet),
+    };
+    let parser = slot.get_or_insert_with(BacnetParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            BacnetParserOutput::Need => break,
+            BacnetParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Bacnet(Box::new(record)));
+            }
+            BacnetParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

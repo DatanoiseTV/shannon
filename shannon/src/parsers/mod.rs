@@ -14,6 +14,7 @@
 //! Each parser has its own `*ParserOutput` and `*Record` types so their
 //! surfaces can carry protocol-specific fields.
 
+pub mod bacnet;
 pub mod cassandra;
 pub mod dnp3;
 pub mod dns;
