@@ -21,7 +21,9 @@ pub fn run(_cli: &Cli) -> anyhow::Result<()> {
     check_rlimit_memlock(&mut report);
     check_capabilities(&mut report);
     check_libssl(&mut report);
+    check_libsqlite3(&mut report);
     check_bpf_fs(&mut report);
+    check_kallsyms(&mut report);
 
     report.print();
 
@@ -214,6 +216,82 @@ fn check_libssl(r: &mut Report) {
         fix: found.is_none().then(|| "apt install libssl3 # or equivalent".into()),
         required: false,
     });
+}
+
+fn check_libsqlite3(r: &mut Report) {
+    // Non-fatal — shannon's network surface works without sqlite, but
+    // SQL capture won't fire if libsqlite3 isn't present.
+    let candidates = [
+        "/lib/x86_64-linux-gnu/libsqlite3.so.0",
+        "/usr/lib/x86_64-linux-gnu/libsqlite3.so.0",
+        "/usr/lib64/libsqlite3.so.0",
+        "/lib64/libsqlite3.so.0",
+    ];
+    let found = candidates.iter().find(|p| Path::new(p).exists());
+    r.push(Row {
+        name: "libsqlite3 (for SQL)",
+        status: if found.is_some() { Status::Ok } else { Status::Warn },
+        detail: found.map_or_else(
+            || "not found — sqlite3_prepare_v2 / exec uprobes will be unavailable".into(),
+            |p| (*p).to_string(),
+        ),
+        fix: found.is_none().then(|| "apt install libsqlite3-0 # or equivalent".into()),
+        required: false,
+    });
+}
+
+fn check_kallsyms(r: &mut Report) {
+    // Verify the kernel symbols our kprobes attach to actually exist.
+    // Missing symbols here means the kernel was built without TCP/UDP
+    // probepoints, or kallsyms is restricted (kptr_restrict).
+    let path = "/proc/kallsyms";
+    let needed: &[&str] = &[
+        "tcp_sendmsg",
+        "tcp_recvmsg",
+        "udp_sendmsg",
+        "udp_recvmsg",
+        "tcp_v4_connect",
+    ];
+    let body = match fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(_) => {
+            r.push(Row {
+                name: "kallsyms readable",
+                status: Status::Warn,
+                detail: format!("cannot read {path}"),
+                fix: Some("sudo sysctl kernel.kptr_restrict=0  # for symbol visibility".into()),
+                required: false,
+            });
+            return;
+        }
+    };
+    let missing: Vec<&str> = needed
+        .iter()
+        .copied()
+        .filter(|sym| !body.lines().any(|l| {
+            // /proc/kallsyms lines look like "ffffffff814a3e90 T tcp_sendmsg".
+            l.split_whitespace().nth(2) == Some(sym)
+        }))
+        .collect();
+    if missing.is_empty() {
+        r.push(Row {
+            name: "kprobe targets",
+            status: Status::Ok,
+            detail: format!("found all {} symbols", needed.len()),
+            fix: None,
+            required: false,
+        });
+    } else {
+        r.push(Row {
+            name: "kprobe targets",
+            status: Status::Warn,
+            detail: format!("missing: {}", missing.join(", ")),
+            fix: Some(
+                "rebuild kernel with CONFIG_KPROBES + CONFIG_NET; or run with kptr_restrict=0".into(),
+            ),
+            required: false,
+        });
+    }
 }
 
 fn check_bpf_fs(r: &mut Report) {
