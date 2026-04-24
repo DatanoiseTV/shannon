@@ -52,6 +52,12 @@ fn main() {
     cmd.env_remove("RUSTFLAGS");
     cmd.env_remove("RUSTC");
     cmd.env_remove("RUSTUP_TOOLCHAIN");
+    // Clippy injects these to wrap rustc with clippy-driver. Without
+    // stripping them here, the inner nightly `cargo build -Z build-std=core`
+    // ends up linting libcore with the *outer* toolchain's clippy-driver,
+    // which fails on intrinsics newer than that driver knows about.
+    cmd.env_remove("RUSTC_WRAPPER");
+    cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");
 
     let status = cmd
         .status()
