@@ -153,11 +153,16 @@ fn attach_kretprobe(bpf: &mut Ebpf, program: &str, function: &str) -> Result<()>
     Ok(())
 }
 
-/// Where libssl might live. We try each in order; attachment to any one is
-/// a success.
+/// Where libssl might live. We walk a known set and deduplicate by
+/// canonical path — many distros symlink `/lib/` to `/usr/lib/` so the
+/// same inode appears twice. A given BPF program can only be loaded
+/// once, so trying both entries would fail the second.
 fn libssl_candidates() -> Vec<std::path::PathBuf> {
+    use std::collections::BTreeSet;
     use std::path::PathBuf;
-    [
+    let mut seen: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut out = Vec::new();
+    for raw in [
         "/lib/x86_64-linux-gnu/libssl.so.3",
         "/lib/x86_64-linux-gnu/libssl.so.1.1",
         "/usr/lib/x86_64-linux-gnu/libssl.so.3",
@@ -166,11 +171,14 @@ fn libssl_candidates() -> Vec<std::path::PathBuf> {
         "/usr/lib64/libssl.so.1.1",
         "/lib64/libssl.so.3",
         "/lib64/libssl.so.1.1",
-    ]
-    .into_iter()
-    .map(PathBuf::from)
-    .filter(|p| p.exists())
-    .collect()
+    ] {
+        let p = PathBuf::from(raw);
+        let Ok(canon) = p.canonicalize() else { continue };
+        if seen.insert(canon.clone()) {
+            out.push(p);
+        }
+    }
+    out
 }
 
 fn attach_libssl(bpf: &mut Ebpf, path: &std::path::Path) -> Result<()> {
