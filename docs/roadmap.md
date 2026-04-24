@@ -52,6 +52,7 @@ critical path.
 | VM / guest traffic | Host-level capture of guest VM traffic: `veth` / tap interface observability, vhost-user for kernel-TLS-terminated KVM, virtio-net probe points, capturing NAT-translated flows via `xt_nat` / conntrack. Per-VM attribution via libvirt domain id → cgroup map. |
 | Leaked-credential / API-key scanner | Pattern-match captured plaintext against known credential shapes: AWS (`AKIA…`/`ASIA…`), GitHub (`ghp_…`/`gho_…`), GitLab, Slack `xox[abpr]-…`, Stripe `sk_live_`/`sk_test_`, Twilio, JWT structure, PEM/PKCS8 blocks, SSH private keys, generic `*_TOKEN=`/`*_SECRET=`/`*_API_KEY=` env-style assignments. Alert + auto-redact in output. |
 | Codegen assistant | `scripts/shannon-codegen` — feeds a recording through Claude Code with a prepared prompt to synthesise `.proto` or IDL from observed messages, generate C/Go/Rust/Python client/server skeletons that speak the observed protocol, explain unknown binary structures. |
+| Industrial / OT protocols | Modbus-TCP (`tcp/502`), DNP3 (`tcp/20000`), IEC 60870-5-104 (`tcp/2404`), BACnet/IP (`udp/47808`), OPC-UA binary (`tcp/4840`), EtherNet/IP + CIP (`tcp/44818`, `udp/2222`), Siemens S7comm (`tcp/102`), PROFINET. Passive parse surfaces device / function-code / register pairs — high value for plant-floor and building-automation observability, usual care re: liability / consent. |
 
 ## v0.2 — protocol breadth
 
