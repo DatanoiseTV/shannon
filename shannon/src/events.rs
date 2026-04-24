@@ -149,6 +149,10 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedEvent> {
             if payload.len() < data_end {
                 bail!("tcp data payload truncated");
             }
+            // sport is host-order (from sk->sk_num); dport is
+            // network-order (from sk->sk_dport) — propagated from the
+            // SockInfo stashed at connect-time.
+            let dport = h.dport.swap_bytes();
             Ok(DecodedEvent::TcpData(
                 ctx,
                 TcpDataInfo {
@@ -157,7 +161,7 @@ pub fn decode(bytes: &[u8]) -> Result<DecodedEvent> {
                         .with_context(|| format!("unknown protocol {}", h.protocol))?,
                     direction: Direction::from(h.direction),
                     src: (ip_from_raw(h.family, &h.saddr)?, h.sport),
-                    dst: (ip_from_raw(h.family, &h.daddr)?, h.dport),
+                    dst: (ip_from_raw(h.family, &h.daddr)?, dport),
                     total_bytes: h.total_bytes,
                     data: payload[data_start..data_end].to_vec(),
                 },

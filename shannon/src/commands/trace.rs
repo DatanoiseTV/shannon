@@ -69,20 +69,23 @@ fn render_event(out: &mut impl Write, ev: &DecodedEvent, _color: bool) -> std::i
             c.bytes_recv,
             c.rtt_us,
         ),
-        DecodedEvent::TcpData(ctx, d) => writeln!(
-            out,
-            "{}  TCP{}  pid={} comm={:<15}  {}:{} {} {}:{}  {} B",
-            wall_clock(),
-            arrow(d.direction),
-            ctx.tgid,
-            truncate(&ctx.comm, 15),
-            fmt_ip(&d.src.0),
-            d.src.1,
-            dir_arrow(d.direction),
-            fmt_ip(&d.dst.0),
-            d.dst.1,
-            d.total_bytes,
-        ),
+        DecodedEvent::TcpData(ctx, d) => {
+            writeln!(
+                out,
+                "{}  TCP{}  pid={} comm={:<15}  {}:{} {} {}:{}  {} B{}",
+                wall_clock(),
+                arrow(d.direction),
+                ctx.tgid,
+                truncate(&ctx.comm, 15),
+                fmt_ip(&d.src.0),
+                d.src.1,
+                dir_arrow(d.direction),
+                fmt_ip(&d.dst.0),
+                d.dst.1,
+                d.total_bytes,
+                preview(&d.data),
+            )
+        }
         DecodedEvent::TlsData(ctx, d) => writeln!(
             out,
             "{}  TLS{}  pid={} comm={:<15}  lib={}  conn={:x}  {} B",
@@ -139,6 +142,35 @@ fn dir_arrow(d: Direction) -> &'static str {
         Direction::Tx => "->",
         Direction::Rx => "<-",
     }
+}
+
+/// Preview the first few printable bytes of a payload — useful for
+/// eyeballing HTTP on a TCP event without a parser wired up.
+fn preview(data: &[u8]) -> String {
+    if data.is_empty() {
+        return String::new();
+    }
+    let n = data.len().min(64);
+    let mut s = String::with_capacity(n + 6);
+    s.push_str("  '");
+    for &b in &data[..n] {
+        if b.is_ascii_graphic() || b == b' ' {
+            s.push(b as char);
+        } else if b == b'\r' {
+            s.push_str("\\r");
+        } else if b == b'\n' {
+            s.push_str("\\n");
+        } else if b == b'\t' {
+            s.push_str("\\t");
+        } else {
+            s.push('.');
+        }
+    }
+    if data.len() > n {
+        s.push_str("…");
+    }
+    s.push('\'');
+    s
 }
 
 fn wall_clock() -> String {

@@ -105,22 +105,33 @@ fn emit_tcp_data(sk: u64, msg: u64, total_bytes: u32, dir: Direction) {
     if util::is_self() || util::filtered_out_by_pid() {
         return;
     }
-    // Look up the socket metadata we stashed at connect-time. Without it we
-    // can't emit a useful event — we don't know the 4-tuple.
-    let Some(info) = (unsafe { SOCKS.get(&sk) }).copied() else {
-        return;
-    };
+    // Look up sock metadata. Missing is OK — we still emit, just with
+    // a zeroed 4-tuple so userspace knows we saw traffic on an
+    // unattributed socket (e.g. inbound/accepted before we attached).
+    let info = unsafe { SOCKS.get(&sk) }.copied().unwrap_or(crate::maps::SockInfo {
+        sock_id: sk,
+        pid: 0,
+        tgid: 0,
+        sport: 0,
+        dport: 0,
+        family: 0,
+        protocol: 0,
+        _pad: [0; 2],
+        saddr: [0; 16],
+        daddr: [0; 16],
+        bytes_sent: 0,
+        bytes_recv: 0,
+        started_ns: 0,
+        comm: [0; 16],
+    });
 
     let Some(scratch_ptr) = SCRATCH.get_ptr_mut(0) else { return };
     // SAFETY: per-CPU map slot valid for this program's lifetime.
     let scratch = unsafe { &mut *scratch_ptr };
 
-    let Ok(captured_len) = read_first_iovec(msg, &mut scratch.bytes) else {
-        return;
-    };
-    if captured_len == 0 {
-        return;
-    }
+    // Try to read payload — if it fails we still emit a zero-length
+    // event so the CLI can show "X bytes sent" even without content.
+    let captured_len = read_first_iovec(msg, &mut scratch.bytes).unwrap_or(0);
 
     // Total event size = EventHeader + TcpDataHeader + captured payload.
     let total_len = size_of::<shannon_common::EventHeader>()
