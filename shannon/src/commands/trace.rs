@@ -18,6 +18,8 @@ use tokio::signal;
 
 use crate::cli::{Cli, TraceArgs};
 use crate::events::{DecodedEvent, Direction};
+use crate::flow::{FlowKey, FlowTable};
+use crate::parsers::ParsedRecord;
 use crate::runtime::{FilterSetup, Runtime};
 
 pub fn run(_cli: &Cli, args: TraceArgs) -> Result<()> {
@@ -33,6 +35,7 @@ async fn run_async(args: TraceArgs) -> Result<()> {
     let mut runtime = Runtime::start_with(&filter)?;
     let mut out = std::io::stdout().lock();
     let color = std::io::stdout().is_terminal();
+    let mut flows = FlowTable::default();
 
     if !filter.pids.is_empty() {
         eprintln!(
@@ -47,12 +50,77 @@ async fn run_async(args: TraceArgs) -> Result<()> {
         tokio::select! {
             _ = signal::ctrl_c() => break,
             maybe = runtime.events_rx.recv() => match maybe {
-                Some(ev) => render_event(&mut out, &ev, color)?,
+                Some(ev) => handle_event(&mut out, &mut flows, &ev, color)?,
                 None => break,
             }
         }
     }
     Ok(())
+}
+
+fn handle_event(
+    out: &mut impl Write,
+    flows: &mut FlowTable,
+    ev: &DecodedEvent,
+    color: bool,
+) -> std::io::Result<()> {
+    render_event(out, ev, color)?;
+
+    // Feed data events into the per-flow parser and emit any records
+    // that fall out. End events clean up flow state.
+    match ev {
+        DecodedEvent::TcpData(ctx, d) => {
+            let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
+            let records = flows.feed(key, d.direction, &d.data);
+            for r in records {
+                render_record(out, ev, &r)?;
+            }
+        }
+        DecodedEvent::TlsData(ctx, d) => {
+            let key = FlowKey::Tls { pid: ctx.tgid, conn_id: d.conn_id };
+            let records = flows.feed(key, d.direction, &d.data);
+            for r in records {
+                render_record(out, ev, &r)?;
+            }
+        }
+        DecodedEvent::ConnEnd(ctx, c) => {
+            flows.forget(&FlowKey::Tcp { pid: ctx.tgid, sock_id: c.sock_id });
+        }
+        DecodedEvent::ConnStart(_, _) | DecodedEvent::Dns(_, _) => {}
+    }
+    Ok(())
+}
+
+fn render_record(
+    out: &mut impl Write,
+    source: &DecodedEvent,
+    r: &ParsedRecord,
+) -> std::io::Result<()> {
+    let via = match source {
+        DecodedEvent::TcpData(_, _) => "http",
+        DecodedEvent::TlsData(_, _) => "https",
+        _ => "http",
+    };
+    match r.kind {
+        crate::parsers::http1::RecordKind::Request => writeln!(
+            out,
+            "{}  {} → {} {}  {} B",
+            wall_clock(),
+            via,
+            r.method.as_deref().unwrap_or("?"),
+            r.path.as_deref().unwrap_or("/"),
+            r.total_body_bytes,
+        ),
+        crate::parsers::http1::RecordKind::Response => writeln!(
+            out,
+            "{}  {} ← {} {}  {} B",
+            wall_clock(),
+            via,
+            r.status.unwrap_or(0),
+            r.reason.as_deref().unwrap_or(""),
+            r.total_body_bytes,
+        ),
+    }
 }
 
 fn render_event(out: &mut impl Write, ev: &DecodedEvent, _color: bool) -> std::io::Result<()> {

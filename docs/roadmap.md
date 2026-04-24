@@ -44,6 +44,8 @@ critical path.
 | Certificate pinning detection | Capture server cert chain during TLS handshake, compare against system CA trust store, flag pinned / self-signed / unknown-CA chains. |
 | Rogue CA detection | Warn when a cert chain roots to a CA not in the system trust store (possible interception). |
 | WebRTC signalling | SDP recognition inside HTTP/WS bodies; STUN/TURN packet parsing. |
+| Body decompression | Decode `Content-Encoding: gzip|br|deflate|zstd` on the fly so `--dump-files` and `trace` show real payloads, not wire-compressed bytes. |
+| Memory-leak mode | Separate `shannon memleak -p PID` subcommand hooking malloc/free/calloc/realloc via uprobes on libc, tracking unfreed allocations with stack traces. Orthogonal to network observation. |
 
 ## v0.2 — protocol breadth
 
