@@ -40,6 +40,7 @@ use crate::parsers::{
     pop3::{Pop3Parser, Pop3ParserOutput, Pop3Record},
     postgres::{PgParserOutput, PgRecord, PostgresParser},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
+    s7comm::{S7Parser, S7ParserOutput, S7Record},
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
     ssh::{SshParser, SshParserOutput, SshRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
@@ -78,6 +79,7 @@ pub enum Protocol {
     Iec104,
     Ssh,
     Dnp3,
+    S7,
     Bypass,
 }
 
@@ -106,6 +108,7 @@ impl Protocol {
             Self::Iec104 => "iec104",
             Self::Ssh => "ssh",
             Self::Dnp3 => "dnp3",
+            Self::S7 => "s7",
             Self::Bypass => "-",
         }
     }
@@ -133,6 +136,7 @@ pub enum AnyRecord {
     Iec104(Box<Iec104Record>),
     Ssh(Box<SshRecord>),
     Dnp3(Box<Dnp3Record>),
+    S7(Box<S7Record>),
 }
 
 impl AnyRecord {
@@ -159,6 +163,7 @@ impl AnyRecord {
             Self::Iec104(_) => "iec104",
             Self::Ssh(_) => "ssh",
             Self::Dnp3(_) => "dnp3",
+            Self::S7(_) => "s7",
         }
     }
 
@@ -185,6 +190,7 @@ impl AnyRecord {
             Self::Iec104(r) => r.display_line(),
             Self::Ssh(r) => r.display_line(),
             Self::Dnp3(r) => r.display_line(),
+            Self::S7(r) => r.display_line(),
         }
     }
 }
@@ -266,6 +272,7 @@ struct ParserSlot {
     iec104: Option<Iec104Parser>,
     ssh: Option<SshParser>,
     dnp3: Option<Dnp3Parser>,
+    s7: Option<S7Parser>,
 }
 
 #[derive(Default)]
@@ -340,6 +347,7 @@ impl FlowTable {
             Protocol::Iec104 => drive_iec104(state, dir),
             Protocol::Ssh => drive_ssh(state, dir),
             Protocol::Dnp3 => drive_dnp3(state, dir),
+            Protocol::S7 => drive_s7(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -370,6 +378,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         2404 => return Protocol::Iec104,
         22 => return Protocol::Ssh,
         20000 => return Protocol::Dnp3,
+        102 => return Protocol::S7,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -946,6 +955,29 @@ fn drive_dnp3(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Dnp3(Box::new(record)));
             }
             Dnp3ParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_s7(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.s7),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.s7),
+    };
+    let parser = slot.get_or_insert_with(S7Parser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            S7ParserOutput::Need => break,
+            S7ParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::S7(Box::new(record)));
+            }
+            S7ParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

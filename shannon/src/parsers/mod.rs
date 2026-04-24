@@ -33,6 +33,7 @@ pub mod opcua;
 pub mod pop3;
 pub mod postgres;
 pub mod redis;
+pub mod s7comm;
 pub mod smtp;
 pub mod ssdp;
 pub mod ssh;
