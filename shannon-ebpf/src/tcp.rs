@@ -37,14 +37,16 @@ use crate::{
     util,
 };
 
-/// Temporary map: (pid_tgid) → (sk, msghdr) recorded at kprobe entry so
-/// the kretprobe can reconstruct the call. Scoped per-thread so concurrent
-/// tcp_recvmsg calls on different CPUs don't collide.
+/// Temporary map: (pid_tgid) → call arguments recorded at kprobe entry so
+/// the kretprobe can reconstruct the call. At entry we walk the iov_iter
+/// once and stash `iov_base` directly — by return time the iter has
+/// advanced, but the user buffer at `iov_base` is now populated.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PendingRecv {
     sk: u64,
-    msg: u64,
+    iov_base: u64,
+    iov_cap: u64,
 }
 
 #[map]
@@ -86,7 +88,11 @@ pub fn tcp_sendmsg(ctx: ProbeContext) -> u32 {
     let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
     let Some(msg) = ctx.arg::<u64>(1) else { return 1 };
     let Some(size) = ctx.arg::<usize>(2) else { return 1 };
-    emit_tcp_data(sk, msg, size as u32, Direction::Tx);
+    let (iov_base, iov_cap) = resolve_iovec(msg).unwrap_or((0, 0));
+    if iov_base != 0 {
+        let captured = (iov_cap as usize).min(size).min(CAP) as u32;
+        emit_tcp_data_from_buf(sk, iov_base, captured, size as u32, Direction::Tx);
+    }
     0
 }
 
@@ -94,8 +100,16 @@ pub fn tcp_sendmsg(ctx: ProbeContext) -> u32 {
 pub fn tcp_recvmsg(ctx: ProbeContext) -> u32 {
     let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
     let Some(msg) = ctx.arg::<u64>(1) else { return 1 };
+
+    // Walk the iov_iter now so we capture the buffer address the caller
+    // prepared — by kretprobe time the iter has advanced past it.
+    let (iov_base, iov_cap) = resolve_iovec(msg).unwrap_or((0, 0));
+    if iov_base == 0 {
+        return 0;
+    }
+
     let pt = bpf_get_current_pid_tgid();
-    let _ = PENDING_RECV.insert(&pt, &PendingRecv { sk, msg }, 0);
+    let _ = PENDING_RECV.insert(&pt, &PendingRecv { sk, iov_base, iov_cap }, 0);
     0
 }
 
@@ -105,12 +119,13 @@ pub fn tcp_recvmsg_ret(ctx: RetProbeContext) -> u32 {
     let Some(pending) = (unsafe { PENDING_RECV.get(&pt) }).copied() else { return 0 };
     let _ = PENDING_RECV.remove(&pt);
 
-    // Return value < 0 is an error; non-positive means no bytes available.
+    // ret < 0 is -errno; 0 is "peer closed". Nothing to capture either way.
     let ret: i32 = ctx.ret().unwrap_or(-1);
     if ret <= 0 {
         return 0;
     }
-    emit_tcp_data(pending.sk, pending.msg, ret as u32, Direction::Rx);
+    let captured = (ret as usize).min(pending.iov_cap as usize).min(CAP) as u32;
+    emit_tcp_data_from_buf(pending.sk, pending.iov_base, captured, ret as u32, Direction::Rx);
     0
 }
 
@@ -120,13 +135,16 @@ enum Direction {
     Rx = 1,
 }
 
-fn emit_tcp_data(sk: u64, msg: u64, total_bytes: u32, dir: Direction) {
+fn emit_tcp_data_from_buf(
+    sk: u64,
+    user_buf: u64,
+    captured: u32,
+    total_bytes: u32,
+    dir: Direction,
+) {
     if util::is_self() || util::filtered_out_by_pid() {
         return;
     }
-    // Look up sock metadata. Missing is OK — we still emit, just with
-    // a zeroed 4-tuple so userspace knows we saw traffic on an
-    // unattributed socket (e.g. inbound/accepted before we attached).
     let info = unsafe { SOCKS.get(&sk) }.copied().unwrap_or(crate::maps::SockInfo {
         sock_id: sk,
         pid: 0,
@@ -145,12 +163,18 @@ fn emit_tcp_data(sk: u64, msg: u64, total_bytes: u32, dir: Direction) {
     });
 
     let Some(scratch_ptr) = SCRATCH.get_ptr_mut(0) else { return };
-    // SAFETY: per-CPU map slot valid for this program's lifetime.
+    // SAFETY: per-CPU slot, valid for the duration of this program.
     let scratch = unsafe { &mut *scratch_ptr };
 
-    // Try to read payload — if it fails we still emit a zero-length
-    // event so the CLI can show "X bytes sent" even without content.
-    let captured_len = read_first_iovec(msg, &mut scratch.bytes).unwrap_or(0);
+    let n = (captured as usize).min(CAP);
+    let captured_len = if n > 0 {
+        match unsafe { bpf_probe_read_user_buf(user_buf as *const u8, &mut scratch.bytes[..n]) } {
+            Ok(()) => n as u32,
+            Err(_) => 0,
+        }
+    } else {
+        0
+    };
 
     // Total event size = EventHeader + TcpDataHeader + captured payload.
     let total_len = size_of::<shannon_common::EventHeader>()
@@ -203,15 +227,15 @@ pub struct TcpDataFrame {
     pub data: [u8; CAP],
 }
 
-fn read_first_iovec(msg: u64, dst: &mut [u8]) -> Result<u32, i64> {
+/// Resolve (iov_base, iov_capacity) from a kernel msghdr pointer,
+/// handling both ITER_UBUF and ITER_IOVEC iov_iter variants.
+fn resolve_iovec(msg: u64) -> Result<(u64, u64), i64> {
     let iov_iter = msg + MSGHDR_IOV_ITER_OFF as u64;
     let iter_type: u8 =
         unsafe { bpf_probe_read_kernel((iov_iter + IOV_ITER_TYPE_OFF as u64) as *const u8) }?;
 
-    let (iov_base, iov_len) = match iter_type {
+    match iter_type {
         ITER_UBUF => {
-            // Inline buffer. __ubuf_iovec lives at the union offset:
-            // { void *base; size_t len; } directly.
             let base: u64 = unsafe {
                 bpf_probe_read_kernel((iov_iter + IOV_ITER_UNION_OFF as u64) as *const u64)
             }?;
@@ -220,36 +244,22 @@ fn read_first_iovec(msg: u64, dst: &mut [u8]) -> Result<u32, i64> {
                     (iov_iter + IOV_ITER_UNION_OFF as u64 + IOVEC_LEN_OFF as u64) as *const u64,
                 )
             }?;
-            (base, len)
+            Ok((base, len))
         }
         ITER_IOVEC => {
-            // Pointer to a `struct iovec`.
             let iov_ptr: u64 = unsafe {
                 bpf_probe_read_kernel((iov_iter + IOV_ITER_UNION_OFF as u64) as *const u64)
             }?;
             if iov_ptr == 0 {
-                return Ok(0);
+                return Ok((0, 0));
             }
             let base: u64 =
                 unsafe { bpf_probe_read_kernel((iov_ptr + IOVEC_BASE_OFF as u64) as *const u64) }?;
             let len: u64 =
                 unsafe { bpf_probe_read_kernel((iov_ptr + IOVEC_LEN_OFF as u64) as *const u64) }?;
-            (base, len)
+            Ok((base, len))
         }
-        // ITER_KVEC / ITER_BVEC / ITER_XARRAY — kernel-internal producers;
-        // we don't care for L7 plaintext capture.
-        _ => return Ok(0),
-    };
-    if iov_base == 0 || iov_len == 0 {
-        return Ok(0);
+        // Kernel-internal producers; not relevant for L7 plaintext.
+        _ => Ok((0, 0)),
     }
-
-    let n = (iov_len as usize).min(CAP);
-    if n == 0 {
-        return Ok(0);
-    }
-    unsafe {
-        bpf_probe_read_user_buf(iov_base as *const u8, &mut dst[..n])?;
-    }
-    Ok(n as u32)
 }
