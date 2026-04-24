@@ -299,6 +299,15 @@ pub struct TraceArgs {
     #[arg(long = "dump-certs", value_name = "DIR")]
     pub dump_certs_dir: Option<PathBuf>,
 
+    /// Certificate pinning allowlist directory. Every `.der` file in
+    /// this directory has its SHA-256 computed and added to the
+    /// trusted set; any cert observed on the wire whose fingerprint
+    /// isn't in the set gets flagged `⚠ cert-anomaly not in pinning
+    /// allowlist`. Typically the same directory populated by a prior
+    /// `--dump-certs` run — dump, review, trust, then pin.
+    #[arg(long = "cert-pin", value_name = "DIR")]
+    pub cert_pin_dir: Option<PathBuf>,
+
     #[command(flatten)]
     pub filter: FilterArgs,
 }

@@ -32,6 +32,10 @@ pub struct CertDumper {
     dir: PathBuf,
     seen: HashSet<[u8; 32]>,
     count: u64,
+    /// SHA-256 fingerprints of certificates the operator considers
+    /// trustworthy. When non-empty, any cert with a fingerprint
+    /// outside the set is flagged with `CertAnomaly::NotPinned`.
+    pinned: HashSet<[u8; 32]>,
 }
 
 /// Short summary emitted to the operator's trace line.
@@ -68,6 +72,10 @@ pub enum CertAnomaly {
     /// (browsers) enforces — common on internal / private-CA certs
     /// that would be rejected on the public internet.
     LongValidity(i64),
+    /// Cert's SHA-256 fingerprint isn't in the operator-supplied
+    /// pinning allowlist. Useful as a "did anything new appear?"
+    /// canary on a stable trust set.
+    NotPinned,
 }
 
 impl CertAnomaly {
@@ -78,6 +86,7 @@ impl CertAnomaly {
             Self::ShortRsaKey(n) => format!("RSA key {n}b"),
             Self::OutsideValidity => "outside validity window".into(),
             Self::LongValidity(d) => format!("validity {d}d (> 398d CA/B)"),
+            Self::NotPinned => "not in pinning allowlist".into(),
         }
     }
 }
@@ -86,11 +95,43 @@ impl CertDumper {
     pub fn open(dir: impl AsRef<Path>) -> Result<Self> {
         let dir = dir.as_ref().to_path_buf();
         create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        Ok(Self { dir, seen: HashSet::new(), count: 0 })
+        Ok(Self { dir, seen: HashSet::new(), count: 0, pinned: HashSet::new() })
     }
 
     pub fn count(&self) -> u64 {
         self.count
+    }
+
+    /// Load the SHA-256 fingerprints of every `.der` file in the
+    /// given directory into the pinning allowlist. Returns the number
+    /// of fingerprints loaded so the operator can sanity-check the
+    /// expected set size.
+    pub fn pin_from_dir(&mut self, dir: impl AsRef<Path>) -> Result<usize> {
+        let dir = dir.as_ref();
+        let mut added = 0usize;
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                anyhow::bail!("pin directory {} does not exist", dir.display());
+            }
+            Err(e) => return Err(anyhow::Error::new(e)
+                .context(format!("reading {}", dir.display()))),
+        };
+        for entry in entries {
+            let entry = entry.context("dirent")?;
+            if entry.path().extension().and_then(|s| s.to_str()) != Some("der") {
+                continue;
+            }
+            let bytes = std::fs::read(entry.path())
+                .with_context(|| format!("reading {}", entry.path().display()))?;
+            let mut hasher = Sha256::new();
+            hasher.update(&bytes);
+            let fp: [u8; 32] = hasher.finalize().into();
+            if self.pinned.insert(fp) {
+                added += 1;
+            }
+        }
+        Ok(added)
     }
 
     /// Scan `bytes` for a TLS handshake `Certificate` message. Returns
@@ -195,7 +236,10 @@ impl CertDumper {
         );
         let _ = File::create(&meta_path).and_then(|mut f| f.write_all(meta.as_bytes()));
 
-        let anomalies = detect_anomalies(&x509);
+        let mut anomalies = detect_anomalies(&x509);
+        if !self.pinned.is_empty() && !self.pinned.contains(&fp) {
+            anomalies.push(CertAnomaly::NotPinned);
+        }
 
         self.count += 1;
         Some(CertSummary {
@@ -279,18 +323,40 @@ mod tests {
 
     #[test]
     fn rejects_non_tls() {
-        let mut d = CertDumper { dir: PathBuf::from("/dev/null"), seen: HashSet::new(), count: 0 };
+        let mut d = CertDumper { dir: PathBuf::from("/dev/null"), seen: HashSet::new(), count: 0, pinned: HashSet::new() };
         assert!(d.observe(b"GET / HTTP/1.1\r\n").is_empty());
         assert!(d.observe(&[22, 3, 3]).is_empty()); // truncated header
     }
 
     #[test]
     fn ignores_handshake_without_certificate() {
-        let mut d = CertDumper { dir: PathBuf::from("/dev/null"), seen: HashSet::new(), count: 0 };
-        // TLS record: content type 22, version 0x0303, length 4.
-        // Handshake: ClientHello (type 1), length 0 (malformed but we
-        // just skip non-Certificate handshake types).
+        let mut d = CertDumper { dir: PathBuf::from("/dev/null"), seen: HashSet::new(), count: 0, pinned: HashSet::new() };
         let payload = [22u8, 3, 3, 0, 4, 1, 0, 0, 0];
         assert!(d.observe(&payload).is_empty());
+    }
+
+    #[test]
+    fn pin_from_dir_loads_der_fingerprints() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = b"placeholder DER bytes";
+        let path = tmp.path().join("aaaaaaaaaaaaaaaa.der");
+        std::fs::write(&path, data).unwrap();
+        let mut d = CertDumper::open(tmp.path()).unwrap();
+        let n = d.pin_from_dir(tmp.path()).unwrap();
+        assert_eq!(n, 1);
+        // Second load is a no-op (same fingerprint already present).
+        let n2 = d.pin_from_dir(tmp.path()).unwrap();
+        assert_eq!(n2, 0);
+        // The fingerprint we loaded matches SHA-256 of the bytes.
+        let mut h = Sha256::new();
+        h.update(data);
+        let fp: [u8; 32] = h.finalize().into();
+        assert!(d.pinned.contains(&fp));
+    }
+
+    #[test]
+    fn pin_from_missing_dir_errors() {
+        let mut d = CertDumper::open(std::env::temp_dir()).unwrap();
+        assert!(d.pin_from_dir("/tmp/shannon-no-such-dir-xyz").is_err());
     }
 }

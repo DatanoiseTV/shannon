@@ -38,6 +38,10 @@ sudo shannon map --format json > edges.ndjson
 # sig-alg / short RSA / expired / long-validity anomalies inline
 sudo shannon trace --dump-certs /tmp/shannon-certs
 
+# pin those certs: dump once, review, keep the .der files you trust,
+# then re-run with --cert-pin — anything new trips "not in allowlist".
+sudo shannon trace --cert-pin /tmp/shannon-certs
+
 # pre-flight: is this box supported?
 shannon doctor
 

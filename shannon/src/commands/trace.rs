@@ -62,11 +62,20 @@ async fn run_async(args: TraceArgs) -> Result<()> {
     };
 
     // Certificate dumper — extracts X.509 certs from TLS handshakes in
-    // TCP streams and saves to disk.
-    let mut cert_dumper = match args.dump_certs_dir.as_ref() {
-        Some(p) => Some(CertDumper::open(p)?),
-        None => None,
+    // TCP streams and saves to disk. A pinning allowlist can be loaded
+    // without activating the dump-to-disk side; in that case point the
+    // dumper at a scratch dir (we still need a place to write freshly-
+    // seen certs so the operator can see what they'd accept if they
+    // extended the allowlist).
+    let mut cert_dumper = match (args.dump_certs_dir.as_ref(), args.cert_pin_dir.as_ref()) {
+        (Some(p), _) => Some(CertDumper::open(p)?),
+        (None, Some(p)) => Some(CertDumper::open(p)?),
+        (None, None) => None,
     };
+    if let (Some(dumper), Some(pin_dir)) = (cert_dumper.as_mut(), args.cert_pin_dir.as_ref()) {
+        let loaded = dumper.pin_from_dir(pin_dir)?;
+        tracing::info!(count = loaded, path = %pin_dir.display(), "cert pinning set loaded");
+    }
 
     banner(&args, &filter);
     loop {
