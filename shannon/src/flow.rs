@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use crate::events::Direction;
 use crate::parsers::{
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
+    dnp3::{Dnp3Parser, Dnp3ParserOutput, Dnp3Record},
     http1::{Http1Parser, ParsedRecord as Http1Record, ParserOutput as Http1Output},
     http2::{Http2Parser, Http2ParserOutput, Http2Record},
     iec104::{Iec104Parser, Iec104ParserOutput, Iec104Record},
@@ -76,6 +77,7 @@ pub enum Protocol {
     OpcUa,
     Iec104,
     Ssh,
+    Dnp3,
     Bypass,
 }
 
@@ -103,6 +105,7 @@ impl Protocol {
             Self::OpcUa => "opcua",
             Self::Iec104 => "iec104",
             Self::Ssh => "ssh",
+            Self::Dnp3 => "dnp3",
             Self::Bypass => "-",
         }
     }
@@ -129,6 +132,7 @@ pub enum AnyRecord {
     OpcUa(Box<OpcuaRecord>),
     Iec104(Box<Iec104Record>),
     Ssh(Box<SshRecord>),
+    Dnp3(Box<Dnp3Record>),
 }
 
 impl AnyRecord {
@@ -154,6 +158,7 @@ impl AnyRecord {
             Self::OpcUa(_) => "opcua",
             Self::Iec104(_) => "iec104",
             Self::Ssh(_) => "ssh",
+            Self::Dnp3(_) => "dnp3",
         }
     }
 
@@ -179,6 +184,7 @@ impl AnyRecord {
             Self::OpcUa(r) => r.display_line(),
             Self::Iec104(r) => r.display_line(),
             Self::Ssh(r) => r.display_line(),
+            Self::Dnp3(r) => r.display_line(),
         }
     }
 }
@@ -259,6 +265,7 @@ struct ParserSlot {
     opcua: Option<OpcuaParser>,
     iec104: Option<Iec104Parser>,
     ssh: Option<SshParser>,
+    dnp3: Option<Dnp3Parser>,
 }
 
 #[derive(Default)]
@@ -332,6 +339,7 @@ impl FlowTable {
             Protocol::OpcUa => drive_opcua(state, dir),
             Protocol::Iec104 => drive_iec104(state, dir),
             Protocol::Ssh => drive_ssh(state, dir),
+            Protocol::Dnp3 => drive_dnp3(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -361,6 +369,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         4840 | 4843 => return Protocol::OpcUa,
         2404 => return Protocol::Iec104,
         22 => return Protocol::Ssh,
+        20000 => return Protocol::Dnp3,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -914,6 +923,29 @@ fn drive_ssh(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Ssh(Box::new(record)));
             }
             SshParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_dnp3(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.dnp3),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.dnp3),
+    };
+    let parser = slot.get_or_insert_with(Dnp3Parser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            Dnp3ParserOutput::Need => break,
+            Dnp3ParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Dnp3(Box::new(record)));
+            }
+            Dnp3ParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

@@ -15,6 +15,7 @@
 //! surfaces can carry protocol-specific fields.
 
 pub mod cassandra;
+pub mod dnp3;
 pub mod dns;
 pub mod http1;
 pub mod http2;
