@@ -31,8 +31,10 @@ use crate::parsers::{
     mqtt::{MqttParser, MqttParserOutput, MqttRecord},
     mysql::{MysqlParser, MysqlParserOutput, MysqlRecord},
     nats::{NatsParser, NatsParserOutput, NatsRecord},
+    pop3::{Pop3Parser, Pop3ParserOutput, Pop3Record},
     postgres::{PgParserOutput, PgRecord, PostgresParser},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
+    smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
 };
 
@@ -60,6 +62,8 @@ pub enum Protocol {
     Mqtt,
     Nats,
     WebSocket,
+    Pop3,
+    Smtp,
     Bypass,
 }
 
@@ -79,6 +83,8 @@ impl Protocol {
             Self::Mqtt => "mqtt",
             Self::Nats => "nats",
             Self::WebSocket => "ws",
+            Self::Pop3 => "pop3",
+            Self::Smtp => "smtp",
             Self::Bypass => "-",
         }
     }
@@ -97,6 +103,8 @@ pub enum AnyRecord {
     Mqtt(Box<MqttRecord>),
     Nats(Box<NatsRecord>),
     WebSocket(Box<WsRecord>),
+    Pop3(Box<Pop3Record>),
+    Smtp(Box<SmtpRecord>),
 }
 
 impl AnyRecord {
@@ -114,6 +122,8 @@ impl AnyRecord {
             Self::Mqtt(_) => "mqtt",
             Self::Nats(_) => "nats",
             Self::WebSocket(_) => "ws",
+            Self::Pop3(_) => "pop3",
+            Self::Smtp(_) => "smtp",
         }
     }
 
@@ -131,6 +141,8 @@ impl AnyRecord {
             Self::Mqtt(r) => r.display_line(),
             Self::Nats(r) => r.display_line(),
             Self::WebSocket(r) => r.display_line(),
+            Self::Pop3(r) => r.display_line(),
+            Self::Smtp(r) => r.display_line(),
         }
     }
 }
@@ -203,6 +215,8 @@ struct ParserSlot {
     mqtt: Option<MqttParser>,
     nats: Option<NatsParser>,
     websocket: Option<WebSocketParser>,
+    pop3: Option<Pop3Parser>,
+    smtp: Option<SmtpParser>,
 }
 
 #[derive(Default)]
@@ -268,6 +282,8 @@ impl FlowTable {
             Protocol::Mqtt => drive_mqtt(state, dir),
             Protocol::Nats => drive_nats(state, dir),
             Protocol::WebSocket => drive_websocket(state, dir),
+            Protocol::Pop3 => drive_pop3(state, dir),
+            Protocol::Smtp => drive_smtp(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -289,6 +305,8 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         11211 => return Protocol::Memcached,
         1883 | 8883 => return Protocol::Mqtt,
         4222 | 6222 => return Protocol::Nats,
+        110 | 995 => return Protocol::Pop3,
+        25 | 465 | 587 | 2525 => return Protocol::Smtp,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -658,6 +676,52 @@ fn drive_websocket(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::WebSocket(Box::new(record)));
             }
             WsParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_pop3(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.pop3),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.pop3),
+    };
+    let parser = slot.get_or_insert_with(Pop3Parser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            Pop3ParserOutput::Need => break,
+            Pop3ParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Pop3(Box::new(record)));
+            }
+            Pop3ParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_smtp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.smtp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.smtp),
+    };
+    let parser = slot.get_or_insert_with(SmtpParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            SmtpParserOutput::Need => break,
+            SmtpParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Smtp(Box::new(record)));
+            }
+            SmtpParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

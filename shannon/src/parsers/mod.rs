@@ -23,8 +23,10 @@ pub mod mongodb;
 pub mod mqtt;
 pub mod mysql;
 pub mod nats;
+pub mod pop3;
 pub mod postgres;
 pub mod redis;
+pub mod smtp;
 pub mod websocket;
 
 // No re-exports from here — each parser's symbols are accessed via its
