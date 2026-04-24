@@ -15,6 +15,7 @@ mod config;
 mod dns_cache;
 mod doctor;
 mod events;
+mod file_dump;
 mod flow;
 mod logging;
 mod parsers;

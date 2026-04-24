@@ -12,6 +12,7 @@ use crate::api_catalog::{ApiCatalog, Http1Fact, Http2Fact};
 use crate::cli::{Cli, TraceArgs};
 use crate::dns_cache::DnsCache;
 use crate::events::{DecodedEvent, Direction};
+use crate::file_dump::FileDumper;
 use crate::flow::{AnyRecord, FlowKey, FlowTable};
 use crate::parsers::http1::RecordKind as Http1Kind;
 use crate::runtime::{FilterSetup, Runtime};
@@ -41,17 +42,26 @@ async fn run_async(args: TraceArgs) -> Result<()> {
         }))
     });
 
+    // File dumper — write HTTP response bodies to disk on the fly.
+    let mut dumper = match args.dump_files_dir.as_ref() {
+        Some(p) => Some(FileDumper::open(p)?),
+        None => None,
+    };
+
     banner(&args, &filter);
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => break,
             maybe = runtime.events_rx.recv() => match maybe {
                 Some(ev) => handle_event(
-                    &mut out, &mut flows, &dns, catalog.as_deref(), &args, &ev, color,
+                    &mut out, &mut flows, &dns, catalog.as_deref(), dumper.as_mut(), &args, &ev, color,
                 )?,
                 None => break,
             }
         }
+    }
+    if let Some(d) = dumper.as_ref() {
+        eprintln!("shannon: dumped {} file(s)", d.count());
     }
 
     if let (Some(cat), Some(path)) = (catalog.as_ref(), args.catalog_file.as_ref()) {
@@ -92,11 +102,13 @@ fn banner(args: &TraceArgs, filter: &FilterSetup) {
     eprintln!("shannon: attached{suffix}. press ctrl-c to stop.");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_event(
     out: &mut impl Write,
     flows: &mut FlowTable,
     dns: &DnsCache,
     catalog: Option<&ApiCatalog>,
+    dumper: Option<&mut FileDumper>,
     args: &TraceArgs,
     ev: &DecodedEvent,
     color: bool,
@@ -111,12 +123,8 @@ fn handle_event(
             let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
             flows.hint_port(key.clone(), d.dst.1);
             let peer = format!("{}:{}", d.dst.0, d.dst.1);
-            for r in flows.feed(key, d.direction, &d.data) {
-                render_record(out, d.direction, &r)?;
-                if let Some(cat) = catalog {
-                    feed_catalog(cat, &r, &peer);
-                }
-            }
+            let records = flows.feed(key, d.direction, &d.data);
+            dispatch_records(out, d.direction, &peer, &records, catalog, dumper)?;
         }
         DecodedEvent::TlsData(ctx, d) => {
             if args.scan_secrets {
@@ -124,17 +132,45 @@ fn handle_event(
             }
             let key = FlowKey::Tls { pid: ctx.tgid, conn_id: d.conn_id };
             let peer = format!("tls:{:x}", d.conn_id);
-            for r in flows.feed(key, d.direction, &d.data) {
-                render_record(out, d.direction, &r)?;
-                if let Some(cat) = catalog {
-                    feed_catalog(cat, &r, &peer);
-                }
-            }
+            let records = flows.feed(key, d.direction, &d.data);
+            dispatch_records(out, d.direction, &peer, &records, catalog, dumper)?;
         }
         DecodedEvent::ConnEnd(ctx, c) => {
             flows.forget(&FlowKey::Tcp { pid: ctx.tgid, sock_id: c.sock_id });
         }
         DecodedEvent::ConnStart(_, _) | DecodedEvent::Dns(_, _) => {}
+    }
+    Ok(())
+}
+
+fn dispatch_records(
+    out: &mut impl Write,
+    dir: Direction,
+    peer: &str,
+    records: &[AnyRecord],
+    catalog: Option<&ApiCatalog>,
+    mut dumper: Option<&mut FileDumper>,
+) -> std::io::Result<()> {
+    for r in records {
+        render_record(out, dir, r)?;
+        if let Some(cat) = catalog {
+            feed_catalog(cat, r, peer);
+        }
+        if let Some(d) = dumper.as_deref_mut() {
+            if let AnyRecord::Http1(hr) = r {
+                if let Some(path) = d.write_http1(
+                    hr,
+                    hr.method.as_deref(),
+                    hr.path.as_deref(),
+                    hr.headers
+                        .iter()
+                        .find(|(k, _)| k.eq_ignore_ascii_case("host"))
+                        .map(|(_, v)| v.as_str()),
+                ) {
+                    writeln!(out, "{}  📥 dumped {}", wall_clock(), path.display())?;
+                }
+            }
+        }
     }
     Ok(())
 }

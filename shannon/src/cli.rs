@@ -273,6 +273,12 @@ pub struct TraceArgs {
     #[arg(long = "scan-secrets")]
     pub scan_secrets: bool,
 
+    /// Dump parsed HTTP response bodies into this directory, decompressing
+    /// `Content-Encoding: gzip|deflate|zstd` on the way. File names include
+    /// a timestamp, method, host, path slug, and short content hash.
+    #[arg(long = "dump-files", value_name = "DIR")]
+    pub dump_files_dir: Option<PathBuf>,
+
     #[command(flatten)]
     pub filter: FilterArgs,
 }
