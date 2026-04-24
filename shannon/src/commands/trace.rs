@@ -9,16 +9,20 @@ use anyhow::Result;
 use tokio::signal;
 
 use crate::api_catalog::{ApiCatalog, Http1Fact, Http2Fact};
+use crate::aws;
 use crate::cert_dump::CertDumper;
 use crate::cli::{Cli, TraceArgs};
+use crate::containers::ContainerResolver;
 use crate::dns_cache::DnsCache;
 use crate::events::{DecodedEvent, Direction};
 use crate::file_dump::FileDumper;
 use crate::flow::{AnyRecord, FlowKey, FlowTable};
+use crate::llm;
 use crate::parsers::http1::RecordKind as Http1Kind;
 use crate::pcap::{Direction as PcapDirection, PcapWriter};
 use crate::runtime::{FilterSetup, Runtime};
 use crate::secrets;
+use crate::warnings;
 
 pub fn run(_cli: &Cli, args: TraceArgs) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
@@ -35,6 +39,7 @@ async fn run_async(args: TraceArgs) -> Result<()> {
     let color = std::io::stdout().is_terminal();
     let mut flows = FlowTable::default();
     let dns = DnsCache::new();
+    let containers = ContainerResolver::new();
 
     // API catalog only if explicitly requested.
     let catalog: Option<Arc<ApiCatalog>> = args.catalog_file.as_ref().map(|p| {
@@ -69,7 +74,7 @@ async fn run_async(args: TraceArgs) -> Result<()> {
             _ = signal::ctrl_c() => break,
             maybe = runtime.events_rx.recv() => match maybe {
                 Some(ev) => handle_event(
-                    &mut out, &mut flows, &dns, catalog.as_deref(),
+                    &mut out, &mut flows, &dns, &containers, catalog.as_deref(),
                     dumper.as_mut(), pcap.as_mut(), cert_dumper.as_mut(),
                     &args, &ev, color,
                 )?,
@@ -132,6 +137,7 @@ fn handle_event(
     out: &mut impl Write,
     flows: &mut FlowTable,
     dns: &DnsCache,
+    containers: &ContainerResolver,
     catalog: Option<&ApiCatalog>,
     dumper: Option<&mut FileDumper>,
     pcap: Option<&mut PcapWriter>,
@@ -140,7 +146,7 @@ fn handle_event(
     ev: &DecodedEvent,
     color: bool,
 ) -> std::io::Result<()> {
-    render_event(out, dns, ev, color)?;
+    render_event(out, dns, containers, ev, color)?;
 
     match ev {
         DecodedEvent::TcpData(ctx, d) => {
@@ -210,16 +216,52 @@ fn dispatch_records(
         if let Some(cat) = catalog {
             feed_catalog(cat, r, peer);
         }
-        if let Some(d) = dumper.as_deref_mut() {
-            if let AnyRecord::Http1(hr) = r {
+        if let AnyRecord::Http1(hr) = r {
+            let host = hr
+                .headers
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("host"))
+                .map(|(_, v)| v.as_str());
+            // LLM classifier.
+            if matches!(hr.kind, Http1Kind::Request) {
+                let method = hr.method.as_deref().unwrap_or("");
+                let path = hr.path.as_deref().unwrap_or("");
+                if let Some(call) =
+                    llm::classify_http_request(method, path, host, &hr.body)
+                {
+                    writeln!(out, "{}  🤖 {}", wall_clock(), call.display_line())?;
+                }
+                // AWS / S3 classifier.
+                if let Some(call) = aws::classify(method, path, host, &hr.headers) {
+                    writeln!(out, "{}  ☁  {}", wall_clock(), call.display_line())?;
+                }
+                // Default-credential warning on Authorization: Basic.
+                if let Some(auth) = hr
+                    .headers
+                    .iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case("authorization"))
+                    .map(|(_, v)| v.trim())
+                {
+                    if let Some(basic) = auth.strip_prefix("Basic ") {
+                        for w in warnings::check_basic_auth(basic, None) {
+                            writeln!(
+                                out,
+                                "{}  ⚠ WARN {}  {} ({:?})",
+                                wall_clock(),
+                                w.kind.label(),
+                                w.detail,
+                                w.severity
+                            )?;
+                        }
+                    }
+                }
+            }
+            if let Some(d) = dumper.as_deref_mut() {
                 if let Some(path) = d.write_http1(
                     hr,
                     hr.method.as_deref(),
                     hr.path.as_deref(),
-                    hr.headers
-                        .iter()
-                        .find(|(k, _)| k.eq_ignore_ascii_case("host"))
-                        .map(|(_, v)| v.as_str()),
+                    host,
                 ) {
                     writeln!(out, "{}  📥 dumped {}", wall_clock(), path.display())?;
                 }
@@ -309,25 +351,24 @@ fn render_record(out: &mut impl Write, dir: Direction, r: &AnyRecord) -> std::io
 fn render_event(
     out: &mut impl Write,
     dns: &DnsCache,
+    containers: &ContainerResolver,
     ev: &DecodedEvent,
     _color: bool,
 ) -> std::io::Result<()> {
     match ev {
         DecodedEvent::ConnStart(ctx, c) => writeln!(
             out,
-            "{}  CONN   pid={} comm={:<15}  {} -> {}",
+            "{}  CONN   {}  {} -> {}",
             wall_clock(),
-            ctx.tgid,
-            truncate(&ctx.comm, 15),
+            fmt_proc(containers, ctx.tgid, &ctx.comm, ctx.cgroup_id),
             fmt_endpoint(dns, &c.src.0, c.src.1),
             fmt_endpoint(dns, &c.dst.0, c.dst.1),
         ),
         DecodedEvent::ConnEnd(ctx, c) => writeln!(
             out,
-            "{}  END    pid={} comm={:<15}  sock={:x}  sent={} recv={}  rtt={}us",
+            "{}  END    {}  sock={:x}  sent={} recv={}  rtt={}us",
             wall_clock(),
-            ctx.tgid,
-            truncate(&ctx.comm, 15),
+            fmt_proc(containers, ctx.tgid, &ctx.comm, ctx.cgroup_id),
             c.sock_id,
             c.bytes_sent,
             c.bytes_recv,
@@ -335,11 +376,10 @@ fn render_event(
         ),
         DecodedEvent::TcpData(ctx, d) => writeln!(
             out,
-            "{}  TCP{}  pid={} comm={:<15}  {} {} {}  {} B{}",
+            "{}  TCP{}  {}  {} {} {}  {} B{}",
             wall_clock(),
             arrow(d.direction),
-            ctx.tgid,
-            truncate(&ctx.comm, 15),
+            fmt_proc(containers, ctx.tgid, &ctx.comm, ctx.cgroup_id),
             fmt_endpoint(dns, &d.src.0, d.src.1),
             dir_arrow(d.direction),
             fmt_endpoint(dns, &d.dst.0, d.dst.1),
@@ -348,27 +388,30 @@ fn render_event(
         ),
         DecodedEvent::TlsData(ctx, d) => writeln!(
             out,
-            "{}  TLS{}  pid={} comm={:<15}  lib={}  {} B{}",
+            "{}  TLS{}  {}  lib={}  {} B{}",
             wall_clock(),
             arrow(d.direction),
-            ctx.tgid,
-            truncate(&ctx.comm, 15),
+            fmt_proc(containers, ctx.tgid, &ctx.comm, ctx.cgroup_id),
             d.tls_lib.label(),
             d.total_bytes,
             preview(&d.data),
         ),
         DecodedEvent::Dns(ctx, d) => writeln!(
             out,
-            "{}  DNS{}  pid={} comm={:<15}  {} {} {}",
+            "{}  DNS{}  {}  {} {} {}",
             wall_clock(),
             arrow(d.direction),
-            ctx.tgid,
-            truncate(&ctx.comm, 15),
+            fmt_proc(containers, ctx.tgid, &ctx.comm, ctx.cgroup_id),
             fmt_endpoint(dns, &d.src.0, d.src.1),
             dir_arrow(d.direction),
             fmt_endpoint(dns, &d.dst.0, d.dst.1),
         ),
     }
+}
+
+fn fmt_proc(containers: &ContainerResolver, tgid: u32, comm: &str, cgroup_id: u64) -> String {
+    let tag = containers.lookup(cgroup_id).map(|c| c.render()).unwrap_or_default();
+    format!("pid={} comm={:<15}{}", tgid, truncate(comm, 15), tag)
 }
 
 fn fmt_endpoint(dns: &DnsCache, ip: &IpAddr, port: u16) -> String {
