@@ -376,8 +376,12 @@ fn render_event(
         ),
         DecodedEvent::TcpData(ctx, d) => writeln!(
             out,
-            "{}  TCP{}  {}  {} {} {}  {} B{}",
+            "{}  {}{}  {}  {} {} {}  {} B{}",
             wall_clock(),
+            match d.protocol {
+                shannon_common::L4Protocol::Udp => "UDP",
+                _ => "TCP",
+            },
             arrow(d.direction),
             fmt_proc(containers, ctx.tgid, &ctx.comm, ctx.cgroup_id),
             fmt_endpoint(dns, &d.src.0, d.src.1),

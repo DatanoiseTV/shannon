@@ -175,9 +175,14 @@ HTTP/1.1 → WebSocket → Socket.IO (on event frames), HTTP/2 → gRPC
 (on `application/grpc`), and any TCP → TLS (on a ClientHello record).
 Nothing you configure.
 
+Both transports captured — **TCP** via `tcp_sendmsg` / `tcp_recvmsg`
+kprobes and **UDP** via `udp_sendmsg` kprobe (IPv4 + IPv6 — dst
+address and port read off `struct sock` with a `msg->msg_name`
+fallback for unconnected sockets). UDP receive side is deferred
+(needs a kretprobe dance).
+
 Deferred to v0.2: Rust `rustls`, Java JSSE, QUIC payload decryption,
-UDP-path BPF kprobe (parsers for NTP / RADIUS / DHCP / BACnet / Kerberos-UDP
-/ Syslog-UDP / SSDP / TFTP / mDNS / STUN-over-UDP are already in place).
+UDP receive path.
 
 ## Privacy
 

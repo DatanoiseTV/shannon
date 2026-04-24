@@ -130,7 +130,7 @@ pub fn tcp_recvmsg_ret(ctx: RetProbeContext) -> u32 {
 }
 
 #[derive(Copy, Clone)]
-enum Direction {
+pub enum Direction {
     Tx = 0,
     Rx = 1,
 }
@@ -229,7 +229,9 @@ pub struct TcpDataFrame {
 
 /// Resolve (iov_base, iov_capacity) from a kernel msghdr pointer,
 /// handling both ITER_UBUF and ITER_IOVEC iov_iter variants.
-fn resolve_iovec(msg: u64) -> Result<(u64, u64), i64> {
+/// `pub` so the UDP path in [`crate::udp`] can reuse it — the layout
+/// is the same between `tcp_sendmsg` and `udp_sendmsg`.
+pub fn resolve_iovec(msg: u64) -> Result<(u64, u64), i64> {
     let iov_iter = msg + MSGHDR_IOV_ITER_OFF as u64;
     let iter_type: u8 =
         unsafe { bpf_probe_read_kernel((iov_iter + IOV_ITER_TYPE_OFF as u64) as *const u8) }?;
