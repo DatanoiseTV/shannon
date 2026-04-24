@@ -17,6 +17,7 @@
 pub mod amqp;
 pub mod bacnet;
 pub mod cassandra;
+pub mod coap;
 pub mod dhcp;
 pub mod dnp3;
 pub mod dns;

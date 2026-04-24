@@ -90,10 +90,10 @@ See [docs/architecture.md](docs/architecture.md) for how it works and
 
 ## What it decodes today
 
-**50 L7 protocols** span web, databases, messaging, mail, directory,
+**51 L7 protocols** span web, databases, messaging, mail, directory,
 telephony, SMS / carrier, media-streaming, remote-access,
-operational-technology, file-sharing, VPN, AAA / network-management,
-and legacy chat.
+operational-technology, IoT / constrained devices, file-sharing, VPN,
+AAA / network-management, and legacy chat.
 
 ### Web + APIs
 
@@ -122,13 +122,14 @@ and legacy chat.
 | Oracle TNS | CONNECT descriptor, SERVICE_NAME / SID / PROGRAM / USER |
 | MS SQL Server TDS | PreLogin / Login7 (user / server / app / db), batch / RPC |
 
-### Messaging + streaming
+### Messaging + streaming + IoT
 
 | Protocol | Notes |
 |---|---|
 | Kafka wire | Produce / Fetch / Metadata / OffsetCommit, API 0-12 |
 | AMQP 0.9.1 (RabbitMQ) | Full class/method table, basic.publish routing-key + exchange |
 | MQTT 3.1.1 / 5 | CONNECT / PUBLISH / SUBSCRIBE with topic + QoS |
+| CoAP | RFC 7252 on udp/5683; type, code, message-id, assembled Uri-Path / Uri-Query, Content-Format |
 | NATS | Text protocol: PUB / SUB / MSG / HPUB / HMSG / INFO |
 | STUN / TURN | WebRTC signalling, XOR-MAPPED-ADDRESS decode, SOFTWARE |
 

@@ -25,6 +25,7 @@ use crate::parsers::{
     amqp::{AmqpParser, AmqpParserOutput, AmqpRecord},
     bacnet::{BacnetParser, BacnetParserOutput, BacnetRecord},
     cassandra::{CassandraParser, CqlParserOutput, CqlRecord},
+    coap::{CoapParser, CoapParserOutput, CoapRecord},
     dhcp::{DhcpParser, DhcpParserOutput, DhcpRecord},
     dnp3::{Dnp3Parser, Dnp3ParserOutput, Dnp3Record},
     dns::{DnsParser, DnsParserOutput, DnsRecord},
@@ -137,6 +138,7 @@ pub enum Protocol {
     Dns,
     Mdns,
     Quic,
+    Coap,
     Bypass,
 }
 
@@ -195,6 +197,7 @@ impl Protocol {
             Self::Dns => "dns",
             Self::Mdns => "mdns",
             Self::Quic => "quic",
+            Self::Coap => "coap",
             Self::Bypass => "-",
         }
     }
@@ -251,6 +254,7 @@ pub enum AnyRecord {
     Smpp(Box<SmppRecord>),
     Dns(Box<DnsRecord>),
     Quic(Box<QuicRecord>),
+    Coap(Box<CoapRecord>),
 }
 
 impl AnyRecord {
@@ -312,6 +316,7 @@ impl AnyRecord {
                 }
             }
             Self::Quic(_) => "quic",
+            Self::Coap(_) => "coap",
         }
     }
 
@@ -367,6 +372,7 @@ impl AnyRecord {
             Self::Smpp(r) => r.display_line(),
             Self::Dns(r) => r.display_line(),
             Self::Quic(r) => r.display_line(),
+            Self::Coap(r) => r.display_line(),
         }
     }
 }
@@ -477,6 +483,7 @@ struct ParserSlot {
     smpp: Option<SmppParser>,
     dns: Option<DnsParser>,
     quic: Option<QuicParser>,
+    coap: Option<CoapParser>,
 }
 
 #[derive(Default)]
@@ -581,6 +588,7 @@ impl FlowTable {
             Protocol::Dns => drive_dns(state, dir, false),
             Protocol::Mdns => drive_dns(state, dir, true),
             Protocol::Quic => drive_quic(state, dir),
+            Protocol::Coap => drive_coap(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -640,6 +648,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         2775 => return Protocol::Smpp,
         53 => return Protocol::Dns,
         5353 => return Protocol::Mdns,
+        5683 => return Protocol::Coap,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -2019,6 +2028,31 @@ fn drive_quic(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Quic(Box::new(record)));
             }
             QuicParserOutput::Skip(n) => {
+                if n == 0 {
+                    break;
+                }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_coap(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.coap),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.coap),
+    };
+    let parser = slot.get_or_insert_with(CoapParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            CoapParserOutput::Need => break,
+            CoapParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Coap(Box::new(record)));
+            }
+            CoapParserOutput::Skip(n) => {
                 if n == 0 {
                     break;
                 }
