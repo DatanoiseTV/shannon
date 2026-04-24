@@ -47,9 +47,16 @@ async fn run_async(args: RecordArgs) -> Result<()> {
         }
     );
 
+    // Listen for SIGTERM as well as SIGINT so `kill` on the record
+    // process flushes the writer cleanly instead of corrupting the
+    // last zstd frame.
+    use tokio::signal::unix::{SignalKind, signal as unix_signal};
+    let mut sigterm =
+        unix_signal(SignalKind::terminate()).context("installing SIGTERM handler")?;
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => break,
+            _ = sigterm.recv() => break,
             maybe = runtime.events_rx.recv() => match maybe {
                 Some(ev) => {
                     let line = serialise(&ev);

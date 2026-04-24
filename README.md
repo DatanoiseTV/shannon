@@ -54,7 +54,7 @@ shannon doctor
 sudo shannon record -o capture.jsonl.zst --rotate 100M
 
 # play it back later (pipe to jq, feed the TUI, or summarise)
-shannon trace  --replay capture.jsonl.zst
+sudo shannon trace --replay capture.jsonl.zst
 shannon analyze capture.jsonl.zst
 ```
 

@@ -35,7 +35,14 @@ async fn run_async(args: TraceArgs) -> Result<()> {
         follow_children: args.filter.follow_children,
         attach_bins: args.filter.attach_bin.clone(),
     };
-    let mut runtime = Runtime::start_with(&filter)?;
+    // Replay path skips the BPF attach entirely — events come from a
+    // recording file instead of the kernel ring buffer.
+    let replay_path = args.replay.clone();
+    let mut runtime = if replay_path.is_some() {
+        None
+    } else {
+        Some(Runtime::start_with(&filter)?)
+    };
     let mut out = std::io::stdout().lock();
     let color = std::io::stdout().is_terminal();
     let mut flows = FlowTable::default();
@@ -79,16 +86,38 @@ async fn run_async(args: TraceArgs) -> Result<()> {
     }
 
     banner(&args, &filter);
-    loop {
-        tokio::select! {
-            _ = signal::ctrl_c() => break,
-            maybe = runtime.events_rx.recv() => match maybe {
-                Some(ev) => handle_event(
-                    &mut out, &mut flows, &dns, &containers, catalog.as_deref(),
-                    dumper.as_mut(), pcap.as_mut(), cert_dumper.as_mut(),
-                    &args, &ev, color,
-                )?,
-                None => break,
+    if let Some(path) = replay_path {
+        // Replay loop — synchronous read from the JSONL file, fed
+        // through the same handle_event pipeline as the live path.
+        let reader = crate::replay::ReplayReader::open(&path)?;
+        let mut count = 0u64;
+        for ev in reader {
+            match ev {
+                Ok(ev) => {
+                    count += 1;
+                    handle_event(
+                        &mut out, &mut flows, &dns, &containers, catalog.as_deref(),
+                        dumper.as_mut(), pcap.as_mut(), cert_dumper.as_mut(),
+                        &args, &ev, color,
+                    )?;
+                }
+                Err(err) => tracing::warn!(%err, "skipping unparseable event"),
+            }
+        }
+        eprintln!("shannon: replayed {count} event(s) from {}", path.display());
+    } else {
+        let runtime = runtime.as_mut().expect("live mode must have a runtime");
+        loop {
+            tokio::select! {
+                _ = signal::ctrl_c() => break,
+                maybe = runtime.events_rx.recv() => match maybe {
+                    Some(ev) => handle_event(
+                        &mut out, &mut flows, &dns, &containers, catalog.as_deref(),
+                        dumper.as_mut(), pcap.as_mut(), cert_dumper.as_mut(),
+                        &args, &ev, color,
+                    )?,
+                    None => break,
+                }
             }
         }
     }
