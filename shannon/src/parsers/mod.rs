@@ -14,6 +14,7 @@
 //! Each parser has its own `*ParserOutput` and `*Record` types so their
 //! surfaces can carry protocol-specific fields.
 
+pub mod cassandra;
 pub mod http1;
 pub mod http2;
 pub mod kafka;
