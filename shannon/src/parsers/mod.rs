@@ -59,6 +59,7 @@ pub mod telnet;
 pub mod tftp;
 pub mod tls;
 pub mod websocket;
+pub mod wireguard;
 
 // No re-exports from here — each parser's symbols are accessed via its
 // own module path so the intended types are unambiguous at call sites.

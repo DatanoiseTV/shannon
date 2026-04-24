@@ -65,6 +65,7 @@ use crate::parsers::{
     tftp::{TftpParser, TftpParserOutput, TftpRecord},
     tls::{TlsParser, TlsParserOutput, TlsRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
+    wireguard::{WireguardParser, WireguardParserOutput, WireguardRecord},
 };
 
 const BUF_CAP: usize = 64 * 1024;
@@ -122,6 +123,7 @@ pub enum Protocol {
     Tacacs,
     Snmp,
     Smb,
+    WireGuard,
     Bypass,
 }
 
@@ -172,6 +174,7 @@ impl Protocol {
             Self::Tacacs => "tacacs+",
             Self::Snmp => "snmp",
             Self::Smb => "smb",
+            Self::WireGuard => "wg",
             Self::Bypass => "-",
         }
     }
@@ -221,6 +224,7 @@ pub enum AnyRecord {
     Tacacs(Box<TacacsRecord>),
     Snmp(Box<SnmpRecord>),
     Smb(Box<SmbRecord>),
+    WireGuard(Box<WireguardRecord>),
 }
 
 impl AnyRecord {
@@ -269,6 +273,7 @@ impl AnyRecord {
             Self::Tacacs(_) => "tacacs+",
             Self::Snmp(_) => "snmp",
             Self::Smb(_) => "smb",
+            Self::WireGuard(_) => "wg",
         }
     }
 
@@ -317,6 +322,7 @@ impl AnyRecord {
             Self::Tacacs(r) => r.display_line(),
             Self::Snmp(r) => r.display_line(),
             Self::Smb(r) => r.display_line(),
+            Self::WireGuard(r) => r.display_line(),
         }
     }
 }
@@ -420,6 +426,7 @@ struct ParserSlot {
     tacacs: Option<TacacsParser>,
     snmp: Option<SnmpParser>,
     smb: Option<SmbParser>,
+    wireguard: Option<WireguardParser>,
 }
 
 #[derive(Default)]
@@ -516,6 +523,7 @@ impl FlowTable {
             Protocol::Tacacs => drive_tacacs(state, dir),
             Protocol::Snmp => drive_snmp(state, dir),
             Protocol::Smb => drive_smb(state, dir),
+            Protocol::WireGuard => drive_wireguard(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -568,6 +576,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         49 => return Protocol::Tacacs,
         161 | 162 => return Protocol::Snmp,
         139 | 445 => return Protocol::Smb,
+        51820 => return Protocol::WireGuard,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1659,6 +1668,29 @@ fn drive_smb(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Smb(Box::new(record)));
             }
             SmbParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_wireguard(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.wireguard),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.wireguard),
+    };
+    let parser = slot.get_or_insert_with(WireguardParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            WireguardParserOutput::Need => break,
+            WireguardParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::WireGuard(Box::new(record)));
+            }
+            WireguardParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

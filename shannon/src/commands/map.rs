@@ -159,6 +159,7 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::Tacacs(_) => ("tacacs+", None),
         AnyRecord::Snmp(s) => ("snmp", s.community.clone()),
         AnyRecord::Smb(s) => ("smb", s.share_path.clone()),
+        AnyRecord::WireGuard(_) => ("wg", None),
     }
 }
 
