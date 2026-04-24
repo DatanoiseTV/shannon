@@ -91,10 +91,13 @@ impl Runtime {
         attach_kprobe(&mut bpf, "tcp_sendmsg", "tcp_sendmsg")?;
         attach_kprobe(&mut bpf, "tcp_recvmsg", "tcp_recvmsg")?;
         attach_kretprobe(&mut bpf, "tcp_recvmsg_ret", "tcp_recvmsg")?;
-        // UDP tx-side payload capture. udp_sendmsg has the same
-        // signature as tcp_sendmsg; receive side is deferred (needs
-        // a kretprobe dance).
+        // UDP payload capture — both directions. udp_sendmsg uses the
+        // same iovec/sock layout as tcp_sendmsg; recv needs a kretprobe
+        // because the user buffer + msg_name are both populated on
+        // return, not at entry.
         attach_kprobe(&mut bpf, "udp_sendmsg", "udp_sendmsg")?;
+        attach_kprobe(&mut bpf, "udp_recvmsg", "udp_recvmsg")?;
+        attach_kretprobe(&mut bpf, "udp_recvmsg_ret", "udp_recvmsg")?;
 
         if filter.follow_children {
             attach_tracepoint(&mut bpf, "sched_process_fork", "sched", "sched_process_fork")?;

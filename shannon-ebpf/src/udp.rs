@@ -48,9 +48,14 @@
 //! ```
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_kernel, bpf_probe_read_kernel_buf, bpf_probe_read_user_buf},
-    macros::kprobe,
-    programs::ProbeContext,
+    bindings::BPF_F_NO_PREALLOC,
+    helpers::{
+        bpf_get_current_pid_tgid, bpf_probe_read_kernel, bpf_probe_read_kernel_buf,
+        bpf_probe_read_user_buf,
+    },
+    macros::{kprobe, kretprobe, map},
+    maps::HashMap,
+    programs::{ProbeContext, RetProbeContext},
 };
 
 use shannon_common::{EventKind, TcpDataHeader};
@@ -59,6 +64,22 @@ use crate::conn::Event;
 use crate::maps::{EVENTS, SCRATCH};
 use crate::tcp::{resolve_iovec, Direction, TcpDataFrame};
 use crate::util;
+
+/// Temporary map for udp_recvmsg → udp_recvmsg_ret correlation.
+/// Stashed at entry so the return probe can read the now-populated
+/// user buffer and the now-populated `msg_name` (source addr).
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct PendingUdpRecv {
+    sk: u64,
+    msg: u64,
+    iov_base: u64,
+    iov_cap: u64,
+}
+
+#[map]
+static PENDING_UDP_RECV: HashMap<u64, PendingUdpRecv> =
+    HashMap::with_max_entries(16_384, BPF_F_NO_PREALLOC);
 
 // struct sock / sock_common — x86_64, Linux 6.12,
 // CONFIG_NET_NS=y, CONFIG_IPV6=y. Offsets derived from kernel
@@ -105,6 +126,59 @@ pub fn udp_sendmsg(ctx: ProbeContext) -> u32 {
     }
     let captured = (iov_cap as usize).min(size).min(CAP) as u32;
     emit_udp_data(sk, msg, iov_base, captured, size as u32, Direction::Tx);
+    0
+}
+
+#[kprobe]
+pub fn udp_recvmsg(ctx: ProbeContext) -> u32 {
+    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
+    let Some(msg) = ctx.arg::<u64>(1) else { return 1 };
+
+    // Stash the iov_base now — the iter advances by return time.
+    // msg_name is *not* populated yet; the kernel writes it as part
+    // of `__sys_recvmsg` on its way back out. We reread it in the
+    // kretprobe.
+    let (iov_base, iov_cap) = resolve_iovec(msg).unwrap_or((0, 0));
+    if iov_base == 0 {
+        return 0;
+    }
+    let pt = bpf_get_current_pid_tgid();
+    let _ = PENDING_UDP_RECV.insert(
+        &pt,
+        &PendingUdpRecv { sk, msg, iov_base, iov_cap },
+        0,
+    );
+    0
+}
+
+#[kretprobe]
+pub fn udp_recvmsg_ret(ctx: RetProbeContext) -> u32 {
+    let pt = bpf_get_current_pid_tgid();
+    let Some(pending) = (unsafe { PENDING_UDP_RECV.get(&pt) }).copied() else { return 0 };
+    let _ = PENDING_UDP_RECV.remove(&pt);
+
+    let ret: i32 = ctx.ret().unwrap_or(-1);
+    if ret <= 0 {
+        return 0;
+    }
+    if util::is_self() || util::filtered_out_by_pid() {
+        return 0;
+    }
+    let captured = (ret as usize).min(pending.iov_cap as usize).min(CAP) as u32;
+    // On recv the "destination" for our purposes is still the
+    // server-side endpoint of the socket — emit_udp_data reads the
+    // sock's daddr/dport which is what a connected client expects.
+    // For unconnected sockets (common on UDP servers), those fields
+    // are zero and we fall back to msg->msg_name, which the kernel
+    // has populated by return time with the sender address.
+    emit_udp_data(
+        pending.sk,
+        pending.msg,
+        pending.iov_base,
+        captured,
+        ret as u32,
+        Direction::Rx,
+    );
     0
 }
 
