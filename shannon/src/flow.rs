@@ -53,6 +53,7 @@ use crate::parsers::{
     redis::{RedisParser, RedisParserOutput, RedisRecord},
     s7comm::{S7Parser, S7ParserOutput, S7Record},
     sip::{SipParser, SipParserOutput, SipRecord},
+    smb::{SmbParser, SmbParserOutput, SmbRecord},
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
     snmp::{SnmpParser, SnmpParserOutput, SnmpRecord},
     socks::{SocksParser, SocksParserOutput, SocksRecord},
@@ -120,6 +121,7 @@ pub enum Protocol {
     Tftp,
     Tacacs,
     Snmp,
+    Smb,
     Bypass,
 }
 
@@ -169,6 +171,7 @@ impl Protocol {
             Self::Tftp => "tftp",
             Self::Tacacs => "tacacs+",
             Self::Snmp => "snmp",
+            Self::Smb => "smb",
             Self::Bypass => "-",
         }
     }
@@ -217,6 +220,7 @@ pub enum AnyRecord {
     Tftp(Box<TftpRecord>),
     Tacacs(Box<TacacsRecord>),
     Snmp(Box<SnmpRecord>),
+    Smb(Box<SmbRecord>),
 }
 
 impl AnyRecord {
@@ -264,6 +268,7 @@ impl AnyRecord {
             Self::Tftp(_) => "tftp",
             Self::Tacacs(_) => "tacacs+",
             Self::Snmp(_) => "snmp",
+            Self::Smb(_) => "smb",
         }
     }
 
@@ -311,6 +316,7 @@ impl AnyRecord {
             Self::Tftp(r) => r.display_line(),
             Self::Tacacs(r) => r.display_line(),
             Self::Snmp(r) => r.display_line(),
+            Self::Smb(r) => r.display_line(),
         }
     }
 }
@@ -413,6 +419,7 @@ struct ParserSlot {
     tftp: Option<TftpParser>,
     tacacs: Option<TacacsParser>,
     snmp: Option<SnmpParser>,
+    smb: Option<SmbParser>,
 }
 
 #[derive(Default)]
@@ -508,6 +515,7 @@ impl FlowTable {
             Protocol::Tftp => drive_tftp(state, dir),
             Protocol::Tacacs => drive_tacacs(state, dir),
             Protocol::Snmp => drive_snmp(state, dir),
+            Protocol::Smb => drive_smb(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -559,6 +567,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         69 => return Protocol::Tftp,
         49 => return Protocol::Tacacs,
         161 | 162 => return Protocol::Snmp,
+        139 | 445 => return Protocol::Smb,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1627,6 +1636,29 @@ fn drive_snmp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Snmp(Box::new(record)));
             }
             SnmpParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_smb(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.smb),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.smb),
+    };
+    let parser = slot.get_or_insert_with(SmbParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            SmbParserOutput::Need => break,
+            SmbParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Smb(Box::new(record)));
+            }
+            SmbParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
