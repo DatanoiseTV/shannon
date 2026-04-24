@@ -423,13 +423,13 @@ mod tests {
 
     #[test]
     fn header_is_stable_size() {
-        assert_eq!(core::mem::size_of::<EventHeader>(), HEADER_SIZE);
+        assert_eq!(size_of::<EventHeader>(), HEADER_SIZE);
     }
 
     #[test]
     fn short_buffer_rejected() {
         let buf = [0u8; HEADER_SIZE - 1];
-        assert_eq!(validate(&buf), Err(ParseError::Short));
+        assert!(matches!(validate(&buf), Err(ParseError::Short)));
     }
 
     #[test]

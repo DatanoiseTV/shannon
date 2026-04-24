@@ -61,6 +61,20 @@ cargo xtask build --release
 sudo ./target/release/shannon doctor
 ```
 
+### Cross-building from a non-Linux workstation
+
+shannon is Linux-only (eBPF). If you develop on macOS, `scripts/push-build.sh`
+pushes the tree to a Linux host and runs cargo there:
+
+```bash
+# defaults: rsync to syso@10.243.243.8:~/shannon, sources ~/.cargo/env
+SHANNON_HOST=you@yourhost SHANNON_PATH=shannon scripts/push-build.sh build
+scripts/push-build.sh test parsers       # any cargo-test filter
+scripts/push-build.sh cargo fmt --check  # any cargo subcommand + args
+scripts/push-build.sh smoke              # build + run the UDP smoke test
+scripts/push-build.sh shell              # rsync + drop into an ssh session
+```
+
 See [docs/architecture.md](docs/architecture.md) for how it works and
 [SECURITY.md](SECURITY.md) for what it can and cannot see.
 
