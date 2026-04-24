@@ -53,6 +53,7 @@ use crate::parsers::{
     radius::{RadiusParser, RadiusParserOutput, RadiusRecord},
     rdp::{RdpParser, RdpParserOutput, RdpRecord},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
+    rtsp::{RtspParser, RtspParserOutput, RtspRecord},
     s7comm::{S7Parser, S7ParserOutput, S7Record},
     sip::{SipParser, SipParserOutput, SipRecord},
     smb::{SmbParser, SmbParserOutput, SmbRecord},
@@ -128,6 +129,7 @@ pub enum Protocol {
     WireGuard,
     Irc,
     Nfs,
+    Rtsp,
     Bypass,
 }
 
@@ -181,6 +183,7 @@ impl Protocol {
             Self::WireGuard => "wg",
             Self::Irc => "irc",
             Self::Nfs => "nfs",
+            Self::Rtsp => "rtsp",
             Self::Bypass => "-",
         }
     }
@@ -233,6 +236,7 @@ pub enum AnyRecord {
     WireGuard(Box<WireguardRecord>),
     Irc(Box<IrcRecord>),
     Nfs(Box<NfsRecord>),
+    Rtsp(Box<RtspRecord>),
 }
 
 impl AnyRecord {
@@ -284,6 +288,7 @@ impl AnyRecord {
             Self::WireGuard(_) => "wg",
             Self::Irc(_) => "irc",
             Self::Nfs(_) => "nfs",
+            Self::Rtsp(_) => "rtsp",
         }
     }
 
@@ -335,6 +340,7 @@ impl AnyRecord {
             Self::WireGuard(r) => r.display_line(),
             Self::Irc(r) => r.display_line(),
             Self::Nfs(r) => r.display_line(),
+            Self::Rtsp(r) => r.display_line(),
         }
     }
 }
@@ -441,6 +447,7 @@ struct ParserSlot {
     wireguard: Option<WireguardParser>,
     irc: Option<IrcParser>,
     nfs: Option<NfsParser>,
+    rtsp: Option<RtspParser>,
 }
 
 #[derive(Default)]
@@ -540,6 +547,7 @@ impl FlowTable {
             Protocol::WireGuard => drive_wireguard(state, dir),
             Protocol::Irc => drive_irc(state, dir),
             Protocol::Nfs => drive_nfs(state, dir),
+            Protocol::Rtsp => drive_rtsp(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -595,6 +603,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         51820 => return Protocol::WireGuard,
         6667 | 6697 | 7000 => return Protocol::Irc,
         2049 => return Protocol::Nfs,
+        554 | 8554 => return Protocol::Rtsp,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1755,6 +1764,29 @@ fn drive_nfs(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Nfs(Box::new(record)));
             }
             NfsParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_rtsp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.rtsp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.rtsp),
+    };
+    let parser = slot.get_or_insert_with(RtspParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            RtspParserOutput::Need => break,
+            RtspParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Rtsp(Box::new(record)));
+            }
+            RtspParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

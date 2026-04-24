@@ -46,6 +46,7 @@ pub mod postgres;
 pub mod radius;
 pub mod rdp;
 pub mod redis;
+pub mod rtsp;
 pub mod s7comm;
 pub mod sip;
 pub mod smb;

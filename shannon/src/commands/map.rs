@@ -162,6 +162,10 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::WireGuard(_) => ("wg", None),
         AnyRecord::Irc(_) => ("irc", None),
         AnyRecord::Nfs(_) => ("nfs", None),
+        AnyRecord::Rtsp(r) => ("rtsp", match &r.kind {
+            crate::parsers::rtsp::RtspKind::Request { uri, .. } => Some(uri.clone()),
+            _ => None,
+        }),
     }
 }
 
