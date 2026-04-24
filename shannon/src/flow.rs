@@ -33,6 +33,7 @@ use crate::parsers::{
     http2::{Http2Parser, Http2ParserOutput, Http2Record},
     iec104::{Iec104Parser, Iec104ParserOutput, Iec104Record},
     imap::{ImapParser, ImapParserOutput, ImapRecord},
+    irc::{IrcParser, IrcParserOutput, IrcRecord},
     kafka::{KafkaParser, KafkaParserOutput, KafkaRecord},
     kerberos::{KerberosParser, KerberosParserOutput, KerberosRecord},
     ldap::{LdapParser, LdapParserOutput, LdapRecord},
@@ -124,6 +125,7 @@ pub enum Protocol {
     Snmp,
     Smb,
     WireGuard,
+    Irc,
     Bypass,
 }
 
@@ -175,6 +177,7 @@ impl Protocol {
             Self::Snmp => "snmp",
             Self::Smb => "smb",
             Self::WireGuard => "wg",
+            Self::Irc => "irc",
             Self::Bypass => "-",
         }
     }
@@ -225,6 +228,7 @@ pub enum AnyRecord {
     Snmp(Box<SnmpRecord>),
     Smb(Box<SmbRecord>),
     WireGuard(Box<WireguardRecord>),
+    Irc(Box<IrcRecord>),
 }
 
 impl AnyRecord {
@@ -274,6 +278,7 @@ impl AnyRecord {
             Self::Snmp(_) => "snmp",
             Self::Smb(_) => "smb",
             Self::WireGuard(_) => "wg",
+            Self::Irc(_) => "irc",
         }
     }
 
@@ -323,6 +328,7 @@ impl AnyRecord {
             Self::Snmp(r) => r.display_line(),
             Self::Smb(r) => r.display_line(),
             Self::WireGuard(r) => r.display_line(),
+            Self::Irc(r) => r.display_line(),
         }
     }
 }
@@ -427,6 +433,7 @@ struct ParserSlot {
     snmp: Option<SnmpParser>,
     smb: Option<SmbParser>,
     wireguard: Option<WireguardParser>,
+    irc: Option<IrcParser>,
 }
 
 #[derive(Default)]
@@ -524,6 +531,7 @@ impl FlowTable {
             Protocol::Snmp => drive_snmp(state, dir),
             Protocol::Smb => drive_smb(state, dir),
             Protocol::WireGuard => drive_wireguard(state, dir),
+            Protocol::Irc => drive_irc(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -577,6 +585,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         161 | 162 => return Protocol::Snmp,
         139 | 445 => return Protocol::Smb,
         51820 => return Protocol::WireGuard,
+        6667 | 6697 | 7000 => return Protocol::Irc,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1691,6 +1700,29 @@ fn drive_wireguard(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::WireGuard(Box::new(record)));
             }
             WireguardParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_irc(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.irc),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.irc),
+    };
+    let parser = slot.get_or_insert_with(IrcParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            IrcParserOutput::Need => break,
+            IrcParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Irc(Box::new(record)));
+            }
+            IrcParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
