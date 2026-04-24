@@ -18,6 +18,7 @@ mod flow;
 mod logging;
 mod parsers;
 mod runtime;
+mod secrets;
 
 use std::process::ExitCode;
 
