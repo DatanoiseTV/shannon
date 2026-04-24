@@ -258,6 +258,21 @@ pub struct TraceArgs {
     #[arg(long)]
     pub latency_hist: bool,
 
+    /// Build a running API catalog (URL templates, params, schemas) and
+    /// save to this JSON file on exit. Combine with `--openapi` to also
+    /// emit an OpenAPI 3.0 spec.
+    #[arg(long = "catalog", value_name = "PATH")]
+    pub catalog_file: Option<PathBuf>,
+
+    /// Export the API catalog as OpenAPI 3.0 YAML at this path on exit.
+    #[arg(long = "openapi", value_name = "PATH")]
+    pub openapi_file: Option<PathBuf>,
+
+    /// Scan every decoded payload for leaked credentials / API keys.
+    /// Matches print as inline warnings; secrets themselves are redacted.
+    #[arg(long = "scan-secrets")]
+    pub scan_secrets: bool,
+
     #[command(flatten)]
     pub filter: FilterArgs,
 }

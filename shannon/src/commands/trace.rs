@@ -1,27 +1,21 @@
 //! `shannon trace` — stream decoded events to stdout.
-//!
-//! For v0.1 the output format is a line-oriented human-readable rendering:
-//!
-//!   `HH:MM:SS.mmm CONN  pid=NNN comm=foo  192.168.1.2:9000 -> 1.1.1.1:443`
-//!   `HH:MM:SS.mmm TCP→  pid=NNN comm=foo  ...:52 B 'GET / HTTP/1.1'`
-//!
-//! It's machine-parseable by `awk`/`cut` for quick shell hacks; the richer
-//! structured output (ndjson) is wired up alongside the protocol parsers
-//! in the next commit batch.
 
 use std::io::{IsTerminal, Write};
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use tokio::signal;
 
+use crate::api_catalog::{ApiCatalog, Http1Fact, Http2Fact};
 use crate::cli::{Cli, TraceArgs};
 use crate::dns_cache::DnsCache;
 use crate::events::{DecodedEvent, Direction};
-use crate::flow::{FlowKey, FlowTable};
-use crate::parsers::ParsedRecord;
+use crate::flow::{AnyRecord, FlowKey, FlowTable};
+use crate::parsers::http1::RecordKind as Http1Kind;
 use crate::runtime::{FilterSetup, Runtime};
+use crate::secrets;
 
 pub fn run(_cli: &Cli, args: TraceArgs) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
@@ -39,51 +33,102 @@ async fn run_async(args: TraceArgs) -> Result<()> {
     let mut flows = FlowTable::default();
     let dns = DnsCache::new();
 
-    if !filter.pids.is_empty() {
-        eprintln!(
-            "shannon: attached, filter: pids={:?}{}",
-            filter.pids,
-            if filter.follow_children { " (+children)" } else { "" }
-        );
-    } else {
-        eprintln!("shannon: attached. press ctrl-c to stop.");
-    }
+    // API catalog only if explicitly requested.
+    let catalog: Option<Arc<ApiCatalog>> = args.catalog_file.as_ref().map(|p| {
+        Arc::new(ApiCatalog::load(p).unwrap_or_else(|err| {
+            tracing::warn!(%err, "couldn't load existing catalog; starting empty");
+            ApiCatalog::new()
+        }))
+    });
+
+    banner(&args, &filter);
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => break,
             maybe = runtime.events_rx.recv() => match maybe {
-                Some(ev) => handle_event(&mut out, &mut flows, &dns, &ev, color)?,
+                Some(ev) => handle_event(
+                    &mut out, &mut flows, &dns, catalog.as_deref(), &args, &ev, color,
+                )?,
                 None => break,
             }
         }
     }
+
+    if let (Some(cat), Some(path)) = (catalog.as_ref(), args.catalog_file.as_ref()) {
+        if let Err(err) = cat.save(path) {
+            tracing::error!(%err, path = %path.display(), "saving catalog");
+        } else {
+            eprintln!("shannon: catalog saved ({} endpoints) to {}", cat.len(), path.display());
+        }
+    }
+    if let (Some(cat), Some(path)) = (catalog.as_ref(), args.openapi_file.as_ref()) {
+        if let Err(err) = cat.export_openapi(path, "shannon observed") {
+            tracing::error!(%err, path = %path.display(), "exporting openapi");
+        } else {
+            eprintln!("shannon: openapi exported to {}", path.display());
+        }
+    }
     Ok(())
+}
+
+fn banner(args: &TraceArgs, filter: &FilterSetup) {
+    let mut tags: Vec<String> = Vec::new();
+    if !filter.pids.is_empty() {
+        tags.push(format!("pids={:?}", filter.pids));
+    }
+    if filter.follow_children {
+        tags.push("+children".into());
+    }
+    if args.scan_secrets {
+        tags.push("secrets-scan".into());
+    }
+    if args.catalog_file.is_some() {
+        tags.push("catalog".into());
+    }
+    if args.openapi_file.is_some() {
+        tags.push("openapi".into());
+    }
+    let suffix = if tags.is_empty() { String::new() } else { format!(" ({})", tags.join(", ")) };
+    eprintln!("shannon: attached{suffix}. press ctrl-c to stop.");
 }
 
 fn handle_event(
     out: &mut impl Write,
     flows: &mut FlowTable,
     dns: &DnsCache,
+    catalog: Option<&ApiCatalog>,
+    args: &TraceArgs,
     ev: &DecodedEvent,
     color: bool,
 ) -> std::io::Result<()> {
     render_event(out, dns, ev, color)?;
 
-    // Feed data events into the per-flow parser and emit any records
-    // that fall out. End events clean up flow state.
     match ev {
         DecodedEvent::TcpData(ctx, d) => {
+            if args.scan_secrets {
+                scan_and_warn(out, "tcp", ctx.tgid, &ctx.comm, &d.data)?;
+            }
             let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
-            let records = flows.feed(key, d.direction, &d.data);
-            for r in records {
-                render_record(out, ev, &r)?;
+            flows.hint_port(key.clone(), d.dst.1);
+            let peer = format!("{}:{}", d.dst.0, d.dst.1);
+            for r in flows.feed(key, d.direction, &d.data) {
+                render_record(out, d.direction, &r)?;
+                if let Some(cat) = catalog {
+                    feed_catalog(cat, &r, &peer);
+                }
             }
         }
         DecodedEvent::TlsData(ctx, d) => {
+            if args.scan_secrets {
+                scan_and_warn(out, "tls", ctx.tgid, &ctx.comm, &d.data)?;
+            }
             let key = FlowKey::Tls { pid: ctx.tgid, conn_id: d.conn_id };
-            let records = flows.feed(key, d.direction, &d.data);
-            for r in records {
-                render_record(out, ev, &r)?;
+            let peer = format!("tls:{:x}", d.conn_id);
+            for r in flows.feed(key, d.direction, &d.data) {
+                render_record(out, d.direction, &r)?;
+                if let Some(cat) = catalog {
+                    feed_catalog(cat, &r, &peer);
+                }
             }
         }
         DecodedEvent::ConnEnd(ctx, c) => {
@@ -94,36 +139,81 @@ fn handle_event(
     Ok(())
 }
 
-fn render_record(
+fn scan_and_warn(
     out: &mut impl Write,
-    source: &DecodedEvent,
-    r: &ParsedRecord,
+    layer: &str,
+    pid: u32,
+    comm: &str,
+    bytes: &[u8],
 ) -> std::io::Result<()> {
-    let via = match source {
-        DecodedEvent::TcpData(_, _) => "http",
-        DecodedEvent::TlsData(_, _) => "https",
-        _ => "http",
-    };
-    match r.kind {
-        crate::parsers::http1::RecordKind::Request => writeln!(
+    for f in secrets::scan(bytes) {
+        writeln!(
             out,
-            "{}  {} → {} {}  {} B",
+            "{}  ⚠ SECRET [{}] {} pid={} comm={:<15} sample={}",
             wall_clock(),
-            via,
-            r.method.as_deref().unwrap_or("?"),
-            r.path.as_deref().unwrap_or("/"),
-            r.total_body_bytes,
-        ),
-        crate::parsers::http1::RecordKind::Response => writeln!(
-            out,
-            "{}  {} ← {} {}  {} B",
-            wall_clock(),
-            via,
-            r.status.unwrap_or(0),
-            r.reason.as_deref().unwrap_or(""),
-            r.total_body_bytes,
-        ),
+            layer,
+            f.kind_label,
+            pid,
+            truncate(comm, 15),
+            f.sample,
+        )?;
     }
+    Ok(())
+}
+
+fn feed_catalog(cat: &ApiCatalog, r: &AnyRecord, peer: &str) {
+    match r {
+        AnyRecord::Http1(hr) => {
+            let path = hr.path.clone().unwrap_or_default();
+            let method = hr.method.clone().unwrap_or_default();
+            let req = match hr.kind {
+                Http1Kind::Request => Http1Fact {
+                    method,
+                    path,
+                    headers: hr.headers.clone(),
+                    body: hr.body.clone(),
+                    status: None,
+                },
+                Http1Kind::Response => Http1Fact {
+                    method: String::new(),
+                    path: String::new(),
+                    headers: hr.headers.clone(),
+                    body: hr.body.clone(),
+                    status: hr.status,
+                },
+            };
+            cat.record_http1(&req, None, peer);
+        }
+        AnyRecord::Http2(h2) => {
+            let fact = Http2Fact {
+                stream_id: h2.stream_id,
+                method: h2.method.clone(),
+                path: h2.path.clone(),
+                authority: h2.authority.clone(),
+                content_type: h2.content_type.clone(),
+                status: h2.status,
+                headers: h2.headers.clone(),
+                grpc_service: h2.grpc.as_ref().map(|g| g.service.clone()),
+                grpc_method: h2.grpc.as_ref().map(|g| g.method.clone()),
+                grpc_status: h2.grpc.as_ref().and_then(|g| g.grpc_status),
+                body: h2.data.clone(),
+                end_stream: h2.end_stream,
+            };
+            cat.record_http2(&fact, peer);
+        }
+        _ => {}
+    }
+}
+
+fn render_record(out: &mut impl Write, dir: Direction, r: &AnyRecord) -> std::io::Result<()> {
+    writeln!(
+        out,
+        "{}  {} {}  {}",
+        wall_clock(),
+        r.protocol(),
+        arrow(dir),
+        r.display_line()
+    )
 }
 
 fn render_event(
@@ -232,8 +322,6 @@ fn dir_arrow(d: Direction) -> &'static str {
     }
 }
 
-/// Preview the first few printable bytes of a payload — useful for
-/// eyeballing HTTP on a TCP event without a parser wired up.
 fn preview(data: &[u8]) -> String {
     if data.is_empty() {
         return String::new();
@@ -255,7 +343,7 @@ fn preview(data: &[u8]) -> String {
         }
     }
     if data.len() > n {
-        s.push_str("…");
+        s.push('…');
     }
     s.push('\'');
     s

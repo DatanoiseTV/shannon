@@ -18,12 +18,14 @@ pub mod cassandra;
 pub mod http1;
 pub mod http2;
 pub mod kafka;
+pub mod memcached;
 pub mod mongodb;
+pub mod mqtt;
 pub mod mysql;
+pub mod nats;
 pub mod postgres;
 pub mod redis;
+pub mod websocket;
 
-// HTTP/1 is used by `flow.rs` as the default parser for plaintext HTTP
-// streams. Other parsers are exposed through their own module paths and
-// will be wired into the flow dispatcher in a follow-up change.
-pub use http1::{Http1Parser, ParsedRecord, ParserOutput};
+// No re-exports from here — each parser's symbols are accessed via its
+// own module path so the intended types are unambiguous at call sites.
