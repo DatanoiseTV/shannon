@@ -22,6 +22,7 @@
 pub mod conn;
 pub mod maps;
 pub mod tcp;
+pub mod tls;
 pub mod util;
 
 #[cfg(not(test))]
@@ -35,3 +36,6 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 // `#[used]` via re-export keeps the compiler from eliding them.
 pub use conn::{inet_sock_set_state, tcp_v4_connect, tcp_v6_connect};
 pub use tcp::{tcp_recvmsg, tcp_recvmsg_ret, tcp_sendmsg};
+pub use tls::{
+    ssl_read, ssl_read_ex, ssl_read_ex_ret, ssl_read_ret, ssl_write, ssl_write_ex,
+};

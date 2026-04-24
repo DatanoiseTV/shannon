@@ -9,7 +9,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use aya::Ebpf;
 use aya::maps::{HashMap as BpfHashMap, MapData, RingBuf};
-use aya::programs::{KProbe, TracePoint};
+use aya::programs::{KProbe, TracePoint, UProbe};
 use tokio::sync::mpsc;
 
 use shannon_common::EventHeader;
@@ -70,6 +70,17 @@ impl Runtime {
         attach_kprobe(&mut bpf, "tcp_sendmsg", "tcp_sendmsg")?;
         attach_kprobe(&mut bpf, "tcp_recvmsg", "tcp_recvmsg")?;
         attach_kretprobe(&mut bpf, "tcp_recvmsg_ret", "tcp_recvmsg")?;
+
+        // TLS: attach to every libssl we can find on the host. Missing is
+        // a warning, not a fatal error — a box without TLS libs is still
+        // useful for plaintext observation.
+        for libssl in libssl_candidates() {
+            if let Err(err) = attach_libssl(&mut bpf, &libssl) {
+                tracing::warn!(path = %libssl.display(), %err, "skipping libssl uprobes");
+            } else {
+                tracing::info!(path = %libssl.display(), "attached libssl uprobes");
+            }
+        }
 
         // Spin up the ring-buffer reader.
         let (tx, rx) = mpsc::channel::<DecodedEvent>(4096);
@@ -139,6 +150,62 @@ fn attach_kretprobe(bpf: &mut Ebpf, program: &str, function: &str) -> Result<()>
     prog.load().with_context(|| format!("loading {program}"))?;
     prog.attach(function, 0)
         .with_context(|| format!("attaching {program} to kernel function {function} (ret)"))?;
+    Ok(())
+}
+
+/// Where libssl might live. We try each in order; attachment to any one is
+/// a success.
+fn libssl_candidates() -> Vec<std::path::PathBuf> {
+    use std::path::PathBuf;
+    [
+        "/lib/x86_64-linux-gnu/libssl.so.3",
+        "/lib/x86_64-linux-gnu/libssl.so.1.1",
+        "/usr/lib/x86_64-linux-gnu/libssl.so.3",
+        "/usr/lib/x86_64-linux-gnu/libssl.so.1.1",
+        "/usr/lib64/libssl.so.3",
+        "/usr/lib64/libssl.so.1.1",
+        "/lib64/libssl.so.3",
+        "/lib64/libssl.so.1.1",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .filter(|p| p.exists())
+    .collect()
+}
+
+fn attach_libssl(bpf: &mut Ebpf, path: &std::path::Path) -> Result<()> {
+    for (program, symbol, ret) in [
+        ("ssl_write", "SSL_write", false),
+        ("ssl_write_ex", "SSL_write_ex", false),
+        ("ssl_read", "SSL_read", false),
+        ("ssl_read_ret", "SSL_read", true),
+        ("ssl_read_ex", "SSL_read_ex", false),
+        ("ssl_read_ex_ret", "SSL_read_ex", true),
+    ] {
+        attach_uprobe(bpf, program, symbol, path, ret)?;
+    }
+    Ok(())
+}
+
+fn attach_uprobe(
+    bpf: &mut Ebpf,
+    program: &str,
+    function: &str,
+    target: &std::path::Path,
+    is_ret: bool,
+) -> Result<()> {
+    let prog: &mut UProbe = bpf
+        .program_mut(program)
+        .with_context(|| format!("program {program} not in BPF object"))?
+        .try_into()
+        .with_context(|| format!("program {program} is not a UProbe"))?;
+    prog.load().with_context(|| format!("loading {program}"))?;
+    let _ = is_ret; // aya picks uprobe vs uretprobe from the program type,
+    // which in turn comes from the #[uprobe] / #[uretprobe] attribute on
+    // the BPF side — the `ret` flag here is informational for logging.
+    prog.attach(Some(function), 0, target, None).with_context(|| {
+        format!("attaching {program} to {} in {}", function, target.display())
+    })?;
     Ok(())
 }
 

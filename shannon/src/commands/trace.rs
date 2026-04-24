@@ -88,14 +88,14 @@ fn render_event(out: &mut impl Write, ev: &DecodedEvent, _color: bool) -> std::i
         }
         DecodedEvent::TlsData(ctx, d) => writeln!(
             out,
-            "{}  TLS{}  pid={} comm={:<15}  lib={}  conn={:x}  {} B",
+            "{}  TLS{}  pid={} comm={:<15}  lib={}  {} B{}",
             wall_clock(),
             arrow(d.direction),
             ctx.tgid,
             truncate(&ctx.comm, 15),
             d.tls_lib.label(),
-            d.conn_id,
             d.total_bytes,
+            preview(&d.data),
         ),
         DecodedEvent::Dns(ctx, d) => writeln!(
             out,
