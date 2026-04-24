@@ -244,6 +244,16 @@ fn dispatch_records(
                 if let Some(call) = aws::classify(method, path, host, &hr.headers) {
                     writeln!(out, "{}  ☁  {}", wall_clock(), call.display_line())?;
                 }
+                // GraphQL classifier — operation name + root field for
+                // any POST body shaped like a GraphQL request.
+                let ct = hr
+                    .headers
+                    .iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+                    .map(|(_, v)| v.as_str());
+                if let Some(op) = crate::graphql::classify(ct, &hr.body) {
+                    writeln!(out, "{}  ◈  {}", wall_clock(), op.display_line())?;
+                }
                 // Default-credential warning on Authorization: Basic.
                 if let Some(auth) = hr
                     .headers

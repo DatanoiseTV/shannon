@@ -78,6 +78,7 @@ and legacy chat.
 | HTTP/1.x | Requests, responses, headers, bodies, chunked + range reassembly |
 | HTTP/2 | HPACK, per-stream framing |
 | gRPC | On HTTP/2: service, method, status; body decode with `--proto` |
+| GraphQL | On HTTP: operation name + root field (query / mutation / subscription) |
 | WebSocket | RFC 6455 frames; follows HTTP/1.1 `101 Upgrade` handshake |
 | Socket.IO / Engine.IO | Event name, namespace, JSON args, ack IDs |
 | TLS 1.0-1.3 | ClientHello / ServerHello SNI + ALPN + cipher-suite inspection |
