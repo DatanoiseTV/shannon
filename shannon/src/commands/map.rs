@@ -156,6 +156,7 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::Mssql(m) => ("mssql", m.database.clone().or_else(|| m.server_name.clone())),
         AnyRecord::Dhcp(d) => ("dhcp", d.hostname.clone()),
         AnyRecord::Tftp(_) => ("tftp", None),
+        AnyRecord::Tacacs(_) => ("tacacs+", None),
     }
 }
 

@@ -52,6 +52,7 @@ pub mod ssdp;
 pub mod ssh;
 pub mod stun;
 pub mod syslog;
+pub mod tacacs;
 pub mod telnet;
 pub mod tftp;
 pub mod tls;

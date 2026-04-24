@@ -58,6 +58,7 @@ use crate::parsers::{
     ssh::{SshParser, SshParserOutput, SshRecord},
     stun::{StunParser, StunParserOutput, StunRecord},
     syslog::{SyslogParser, SyslogParserOutput, SyslogRecord},
+    tacacs::{TacacsParser, TacacsParserOutput, TacacsRecord},
     telnet::{TelnetParser, TelnetParserOutput, TelnetRecord},
     tftp::{TftpParser, TftpParserOutput, TftpRecord},
     tls::{TlsParser, TlsParserOutput, TlsRecord},
@@ -116,6 +117,7 @@ pub enum Protocol {
     Mssql,
     Dhcp,
     Tftp,
+    Tacacs,
     Bypass,
 }
 
@@ -163,6 +165,7 @@ impl Protocol {
             Self::Mssql => "mssql",
             Self::Dhcp => "dhcp",
             Self::Tftp => "tftp",
+            Self::Tacacs => "tacacs+",
             Self::Bypass => "-",
         }
     }
@@ -209,6 +212,7 @@ pub enum AnyRecord {
     Mssql(Box<MssqlRecord>),
     Dhcp(Box<DhcpRecord>),
     Tftp(Box<TftpRecord>),
+    Tacacs(Box<TacacsRecord>),
 }
 
 impl AnyRecord {
@@ -254,6 +258,7 @@ impl AnyRecord {
             Self::Mssql(_) => "mssql",
             Self::Dhcp(_) => "dhcp",
             Self::Tftp(_) => "tftp",
+            Self::Tacacs(_) => "tacacs+",
         }
     }
 
@@ -299,6 +304,7 @@ impl AnyRecord {
             Self::Mssql(r) => r.display_line(),
             Self::Dhcp(r) => r.display_line(),
             Self::Tftp(r) => r.display_line(),
+            Self::Tacacs(r) => r.display_line(),
         }
     }
 }
@@ -399,6 +405,7 @@ struct ParserSlot {
     mssql: Option<MssqlParser>,
     dhcp: Option<DhcpParser>,
     tftp: Option<TftpParser>,
+    tacacs: Option<TacacsParser>,
 }
 
 #[derive(Default)]
@@ -492,6 +499,7 @@ impl FlowTable {
             Protocol::Mssql => drive_mssql(state, dir),
             Protocol::Dhcp => drive_dhcp(state, dir),
             Protocol::Tftp => drive_tftp(state, dir),
+            Protocol::Tacacs => drive_tacacs(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -541,6 +549,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         1433 | 1434 => return Protocol::Mssql,
         67 | 68 => return Protocol::Dhcp,
         69 => return Protocol::Tftp,
+        49 => return Protocol::Tacacs,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1563,6 +1572,29 @@ fn drive_tftp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Tftp(Box::new(record)));
             }
             TftpParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_tacacs(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.tacacs),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.tacacs),
+    };
+    let parser = slot.get_or_insert_with(TacacsParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            TacacsParserOutput::Need => break,
+            TacacsParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Tacacs(Box::new(record)));
+            }
+            TacacsParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
