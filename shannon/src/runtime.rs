@@ -67,6 +67,9 @@ impl Runtime {
         attach_kprobe(&mut bpf, "tcp_v4_connect", "tcp_v4_connect")?;
         attach_kprobe(&mut bpf, "tcp_v6_connect", "tcp_v6_connect")?;
         attach_tracepoint(&mut bpf, "inet_sock_set_state", "sock", "inet_sock_set_state")?;
+        attach_kprobe(&mut bpf, "tcp_sendmsg", "tcp_sendmsg")?;
+        attach_kprobe(&mut bpf, "tcp_recvmsg", "tcp_recvmsg")?;
+        attach_kretprobe(&mut bpf, "tcp_recvmsg_ret", "tcp_recvmsg")?;
 
         // Spin up the ring-buffer reader.
         let (tx, rx) = mpsc::channel::<DecodedEvent>(4096);
@@ -123,6 +126,19 @@ fn attach_kprobe(bpf: &mut Ebpf, program: &str, function: &str) -> Result<()> {
     prog.load().with_context(|| format!("loading {program}"))?;
     prog.attach(function, 0)
         .with_context(|| format!("attaching {program} to kernel function {function}"))?;
+    Ok(())
+}
+
+fn attach_kretprobe(bpf: &mut Ebpf, program: &str, function: &str) -> Result<()> {
+    use aya::programs::KProbe;
+    let prog: &mut KProbe = bpf
+        .program_mut(program)
+        .with_context(|| format!("program {program} not in BPF object"))?
+        .try_into()
+        .with_context(|| format!("program {program} is not a KProbe"))?;
+    prog.load().with_context(|| format!("loading {program}"))?;
+    prog.attach(function, 0)
+        .with_context(|| format!("attaching {program} to kernel function {function} (ret)"))?;
     Ok(())
 }
 

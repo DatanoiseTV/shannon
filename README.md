@@ -91,6 +91,53 @@ and strips `Authorization`, `Cookie`, `Set-Cookie`, and query-string params matc
 all headers and bodies. You opt into visibility with `--redact off`; never the
 other way around. See [SECURITY.md](SECURITY.md).
 
+## Use cases
+
+- **Incident response**. "Why is the billing service slow?" → `sudo shannon
+  top --sort p99 --group-by endpoint` on the affected node. No redeploy,
+  no sidecar, no code change.
+- **Debugging microservice calls**. See exact HTTP requests one service is
+  making to another, including headers and body, even over TLS, without
+  touching either service's code.
+- **Tracing production bugs that don't reproduce locally**. Capture real
+  traffic with `shannon record -o live.jsonl.zst`, ship the file to a
+  dev box, replay with `shannon trace --replay`.
+- **Security posture audits**. Which processes talk to which external
+  IPs, and what credentials flow? `shannon trace --peer 0.0.0.0/0
+  --redact off --protocol http` (use responsibly — see disclaimer).
+- **Understanding a black-box binary**. Point shannon at a pid with
+  `shannon trace -p $(pidof mysterybin)` and watch it talk.
+- **CI / integration tests**. Record a baseline of service calls, then
+  assert behavioural invariants in CI.
+- **Capacity planning**. `shannon analyze capture.jsonl.zst` gives
+  per-endpoint RPS and latency distributions from a representative
+  recording.
+
+## Disclaimer
+
+This is **research-grade software**. It installs eBPF programs into the
+Linux kernel and reads plaintext bytes from every TCP socket on the host
+it runs on.
+
+- **No warranty.** shannon is provided "as is". The authors and
+  contributors take no liability for any malfunction, system instability,
+  data loss, damage, or loss of business arising from its use.
+- **No fitness for any particular purpose** — including production,
+  compliance, or legal use — is implied or guaranteed.
+- **You are responsible for how you use it.** shannon is a tool; the
+  operator decides what to point it at. Using it to observe traffic
+  belonging to parties who have not authorised such observation may be
+  illegal in your jurisdiction (wiretap, privacy, data-protection laws).
+  The authors take no responsibility for misuse, abuse, or use in
+  violation of any law, contract, or policy.
+- **Privilege boundary.** Running shannon is equivalent to running as
+  root — treat it accordingly. Do not deploy without understanding
+  [SECURITY.md](SECURITY.md).
+
+Use only on systems you own or have explicit written permission to
+observe. Respect the privacy of users whose traffic crosses those
+systems.
+
 ## License
 
 Licensed under either of [Apache 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT) at

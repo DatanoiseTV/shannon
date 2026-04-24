@@ -28,6 +28,11 @@ callgrind.out.*
 *.pcap
 *.log
 
+# Local project journal — running notes, plan, open questions.
+# Never committed; survives across sessions for context reconstruction.
+CHANGELOG.md
+CHANGES.local.md
+
 # Secrets — never commit
 *.pem
 *.key

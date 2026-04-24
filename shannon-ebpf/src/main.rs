@@ -21,6 +21,7 @@
 
 pub mod conn;
 pub mod maps;
+pub mod tcp;
 pub mod util;
 
 #[cfg(not(test))]
@@ -33,3 +34,4 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 // BPF programs by their `#[<program_type>]`-annotated function symbol, but
 // `#[used]` via re-export keeps the compiler from eliding them.
 pub use conn::{inet_sock_set_state, tcp_v4_connect, tcp_v6_connect};
+pub use tcp::{tcp_recvmsg, tcp_recvmsg_ret, tcp_sendmsg};
