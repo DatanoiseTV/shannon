@@ -47,6 +47,11 @@ critical path.
 | Body decompression | Decode `Content-Encoding: gzip|br|deflate|zstd` on the fly so `--dump-files` and `trace` show real payloads, not wire-compressed bytes. |
 | Memory-leak mode | Separate `shannon memleak -p PID` subcommand hooking malloc/free/calloc/realloc via uprobes on libc, tracking unfreed allocations with stack traces. Orthogonal to network observation. |
 | Discovery protocols | mDNS (UDP/5353), SSDP (UDP/1900), DNS-SD, LLMNR (UDP/5355) — passive capture + parse, useful for LAN fingerprinting and ICS/IoT discovery maps. |
+| AWS / S3 semantics | Detect S3 + S3-compatible (MinIO, R2, Backblaze B2, Wasabi) request/response pairs on HTTP, surface bucket / key / operation. Also AWS SigV4 detection → caller identity without decrypting payloads. Extended: DynamoDB, SQS, SNS, STS, IAM, Lambda invocation surfaces. |
+| LLM / OpenAI-compatible APIs | Recognise OpenAI-shape (`/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`), Anthropic Messages, Google Gemini, Ollama, LM Studio, vLLM, TGI, LiteLLM, Azure OpenAI, AWS Bedrock, local llama.cpp servers. Pull model, token counts, tool calls, streaming SSE deltas. |
+| VM / guest traffic | Host-level capture of guest VM traffic: `veth` / tap interface observability, vhost-user for kernel-TLS-terminated KVM, virtio-net probe points, capturing NAT-translated flows via `xt_nat` / conntrack. Per-VM attribution via libvirt domain id → cgroup map. |
+| Leaked-credential / API-key scanner | Pattern-match captured plaintext against known credential shapes: AWS (`AKIA…`/`ASIA…`), GitHub (`ghp_…`/`gho_…`), GitLab, Slack `xox[abpr]-…`, Stripe `sk_live_`/`sk_test_`, Twilio, JWT structure, PEM/PKCS8 blocks, SSH private keys, generic `*_TOKEN=`/`*_SECRET=`/`*_API_KEY=` env-style assignments. Alert + auto-redact in output. |
+| Codegen assistant | `scripts/shannon-codegen` — feeds a recording through Claude Code with a prepared prompt to synthesise `.proto` or IDL from observed messages, generate C/Go/Rust/Python client/server skeletons that speak the observed protocol, explain unknown binary structures. |
 
 ## v0.2 — protocol breadth
 
