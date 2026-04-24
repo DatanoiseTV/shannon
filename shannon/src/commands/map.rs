@@ -157,6 +157,7 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::Dhcp(d) => ("dhcp", d.hostname.clone()),
         AnyRecord::Tftp(_) => ("tftp", None),
         AnyRecord::Tacacs(_) => ("tacacs+", None),
+        AnyRecord::Snmp(s) => ("snmp", s.community.clone()),
     }
 }
 

@@ -54,6 +54,7 @@ use crate::parsers::{
     s7comm::{S7Parser, S7ParserOutput, S7Record},
     sip::{SipParser, SipParserOutput, SipRecord},
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
+    snmp::{SnmpParser, SnmpParserOutput, SnmpRecord},
     socks::{SocksParser, SocksParserOutput, SocksRecord},
     ssh::{SshParser, SshParserOutput, SshRecord},
     stun::{StunParser, StunParserOutput, StunRecord},
@@ -118,6 +119,7 @@ pub enum Protocol {
     Dhcp,
     Tftp,
     Tacacs,
+    Snmp,
     Bypass,
 }
 
@@ -166,6 +168,7 @@ impl Protocol {
             Self::Dhcp => "dhcp",
             Self::Tftp => "tftp",
             Self::Tacacs => "tacacs+",
+            Self::Snmp => "snmp",
             Self::Bypass => "-",
         }
     }
@@ -213,6 +216,7 @@ pub enum AnyRecord {
     Dhcp(Box<DhcpRecord>),
     Tftp(Box<TftpRecord>),
     Tacacs(Box<TacacsRecord>),
+    Snmp(Box<SnmpRecord>),
 }
 
 impl AnyRecord {
@@ -259,6 +263,7 @@ impl AnyRecord {
             Self::Dhcp(_) => "dhcp",
             Self::Tftp(_) => "tftp",
             Self::Tacacs(_) => "tacacs+",
+            Self::Snmp(_) => "snmp",
         }
     }
 
@@ -305,6 +310,7 @@ impl AnyRecord {
             Self::Dhcp(r) => r.display_line(),
             Self::Tftp(r) => r.display_line(),
             Self::Tacacs(r) => r.display_line(),
+            Self::Snmp(r) => r.display_line(),
         }
     }
 }
@@ -406,6 +412,7 @@ struct ParserSlot {
     dhcp: Option<DhcpParser>,
     tftp: Option<TftpParser>,
     tacacs: Option<TacacsParser>,
+    snmp: Option<SnmpParser>,
 }
 
 #[derive(Default)]
@@ -500,6 +507,7 @@ impl FlowTable {
             Protocol::Dhcp => drive_dhcp(state, dir),
             Protocol::Tftp => drive_tftp(state, dir),
             Protocol::Tacacs => drive_tacacs(state, dir),
+            Protocol::Snmp => drive_snmp(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -550,6 +558,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         67 | 68 => return Protocol::Dhcp,
         69 => return Protocol::Tftp,
         49 => return Protocol::Tacacs,
+        161 | 162 => return Protocol::Snmp,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1595,6 +1604,29 @@ fn drive_tacacs(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Tacacs(Box::new(record)));
             }
             TacacsParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_snmp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.snmp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.snmp),
+    };
+    let parser = slot.get_or_insert_with(SnmpParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            SnmpParserOutput::Need => break,
+            SnmpParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Snmp(Box::new(record)));
+            }
+            SnmpParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

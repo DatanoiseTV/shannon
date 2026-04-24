@@ -47,6 +47,7 @@ pub mod redis;
 pub mod s7comm;
 pub mod sip;
 pub mod smtp;
+pub mod snmp;
 pub mod socks;
 pub mod ssdp;
 pub mod ssh;
