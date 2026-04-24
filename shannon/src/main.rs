@@ -27,6 +27,7 @@ mod logging;
 mod parsers;
 mod pcap;
 mod proto;
+mod proto_infer;
 mod runtime;
 mod secrets;
 mod warnings;
@@ -77,6 +78,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Record(args) => commands::record::run(&cli, args),
         Command::Analyze(args) => commands::analyze::run(&cli, args),
         Command::Ask(args) => commands::ask::run(&cli, args),
+        Command::ProtoInfer(args) => commands::proto_infer::run(&cli, args),
         Command::Doctor => doctor::run(&cli),
         Command::Completions(args) => cli::print_completions(args.shell),
         Command::Version => {

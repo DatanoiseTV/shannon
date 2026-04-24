@@ -70,6 +70,8 @@ pub enum Command {
     Analyze(AnalyzeArgs),
     /// Ask a question about observed traffic via a local LLM with tool-use.
     Ask(AskArgs),
+    /// Infer a `.proto` schema from a directory of raw protobuf messages.
+    ProtoInfer(ProtoInferArgs),
     /// Diagnose environment (kernel, BTF, privileges, libssl).
     Doctor,
     /// Generate shell completions.
@@ -424,6 +426,29 @@ pub struct AnalyzeArgs {
     /// How many top endpoints / peers to show.
     #[arg(long, default_value_t = 20)]
     pub depth: u32,
+}
+
+#[derive(Args, Clone, Debug, Default)]
+pub struct ProtoInferArgs {
+    /// Directory of raw protobuf message files (one per sample).
+    #[arg(long, value_name = "DIR")]
+    pub samples: PathBuf,
+
+    /// Write the generated .proto here. Defaults to stdout.
+    #[arg(short, long, value_name = "PATH")]
+    pub output: Option<PathBuf>,
+
+    /// Worker threads. 0 = number of logical CPUs.
+    #[arg(long, default_value_t = 0)]
+    pub threads: usize,
+
+    /// Stop inference after this wall-clock duration.
+    #[arg(long, value_parser = parse_duration)]
+    pub time: Option<Duration>,
+
+    /// Name of the top-level message in the generated .proto.
+    #[arg(long, default_value = "Inferred")]
+    pub message: String,
 }
 
 #[derive(Args, Clone, Debug, Default)]
