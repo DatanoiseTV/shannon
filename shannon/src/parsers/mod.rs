@@ -27,6 +27,7 @@ pub mod mongodb;
 pub mod mqtt;
 pub mod mysql;
 pub mod nats;
+pub mod opcua;
 pub mod pop3;
 pub mod postgres;
 pub mod redis;

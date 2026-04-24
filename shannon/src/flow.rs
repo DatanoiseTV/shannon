@@ -34,6 +34,7 @@ use crate::parsers::{
     mqtt::{MqttParser, MqttParserOutput, MqttRecord},
     mysql::{MysqlParser, MysqlParserOutput, MysqlRecord},
     nats::{NatsParser, NatsParserOutput, NatsRecord},
+    opcua::{OpcuaParser, OpcuaParserOutput, OpcuaRecord},
     pop3::{Pop3Parser, Pop3ParserOutput, Pop3Record},
     postgres::{PgParserOutput, PgRecord, PostgresParser},
     redis::{RedisParser, RedisParserOutput, RedisRecord},
@@ -70,6 +71,7 @@ pub enum Protocol {
     Imap,
     Modbus,
     Ldap,
+    OpcUa,
     Bypass,
 }
 
@@ -94,6 +96,7 @@ impl Protocol {
             Self::Imap => "imap",
             Self::Modbus => "modbus",
             Self::Ldap => "ldap",
+            Self::OpcUa => "opcua",
             Self::Bypass => "-",
         }
     }
@@ -117,6 +120,7 @@ pub enum AnyRecord {
     Imap(Box<ImapRecord>),
     Modbus(Box<ModbusRecord>),
     Ldap(Box<LdapRecord>),
+    OpcUa(Box<OpcuaRecord>),
 }
 
 impl AnyRecord {
@@ -139,6 +143,7 @@ impl AnyRecord {
             Self::Imap(_) => "imap",
             Self::Modbus(_) => "modbus",
             Self::Ldap(_) => "ldap",
+            Self::OpcUa(_) => "opcua",
         }
     }
 
@@ -161,6 +166,7 @@ impl AnyRecord {
             Self::Imap(r) => r.display_line(),
             Self::Modbus(r) => r.display_line(),
             Self::Ldap(r) => r.display_line(),
+            Self::OpcUa(r) => r.display_line(),
         }
     }
 }
@@ -238,6 +244,7 @@ struct ParserSlot {
     imap: Option<ImapParser>,
     modbus: Option<ModbusParser>,
     ldap: Option<LdapParser>,
+    opcua: Option<OpcuaParser>,
 }
 
 #[derive(Default)]
@@ -308,6 +315,7 @@ impl FlowTable {
             Protocol::Imap => drive_imap(state, dir),
             Protocol::Modbus => drive_modbus(state, dir),
             Protocol::Ldap => drive_ldap(state, dir),
+            Protocol::OpcUa => drive_opcua(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -334,6 +342,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         143 | 993 => return Protocol::Imap,
         502 => return Protocol::Modbus,
         389 | 636 | 3268 | 3269 => return Protocol::Ldap,
+        4840 | 4843 => return Protocol::OpcUa,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -818,6 +827,29 @@ fn drive_ldap(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Ldap(Box::new(record)));
             }
             LdapParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_opcua(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.opcua),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.opcua),
+    };
+    let parser = slot.get_or_insert_with(OpcuaParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            OpcuaParserOutput::Need => break,
+            OpcuaParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::OpcUa(Box::new(record)));
+            }
+            OpcuaParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
