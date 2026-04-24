@@ -1,0 +1,11 @@
+[alias]
+xtask = "run --quiet --package xtask --"
+
+[build]
+rustflags = ["-Dwarnings"]
+
+[term]
+verbose = false
+
+# No [target] entries at the workspace root — userspace is native, the BPF
+# crate sets its own target in shannon-ebpf/.cargo/config.toml.

@@ -1,0 +1,36 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Profiling
+perf.data
+perf.data.old
+flamegraph.svg
+callgrind.out.*
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.bpf.o
+
+# Test / scratch
+/scratch
+*.pcap
+*.log
+
+# Secrets — never commit
+*.pem
+*.key
+.env
+.env.*
+!.env.example

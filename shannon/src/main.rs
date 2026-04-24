@@ -1,0 +1,84 @@
+//! shannon — zero-instrumentation L7 observability via eBPF.
+//!
+//! The binary crate is deliberately thin: it wires clap to a set of command
+//! handlers. All real logic lives in sibling modules.
+
+#![forbid(unsafe_op_in_unsafe_fn)]
+
+mod cli;
+mod commands;
+mod config;
+mod doctor;
+mod logging;
+
+use std::process::ExitCode;
+
+use clap::Parser;
+
+use crate::cli::{Cli, Command};
+
+/// Main entry. Returns a process exit code:
+///
+/// - `0` success
+/// - `1` any other error
+/// - `2` usage error (emitted by clap on parse failure)
+/// - `64` config error
+/// - `77` missing privileges
+/// - `78` kernel / BTF unsupported
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+
+    if let Err(err) = logging::init(cli.verbose, cli.quiet, cli.log_file.as_deref()) {
+        eprintln!("shannon: failed to initialise logging: {err:#}");
+        return ExitCode::from(1);
+    }
+
+    match run(cli) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            tracing::error!(error = %err, "shannon exited with error");
+            let code = err.downcast_ref::<AppError>().map_or(1u8, AppError::exit_code);
+            ExitCode::from(code)
+        }
+    }
+}
+
+fn run(cli: Cli) -> anyhow::Result<()> {
+    let command = cli.command.clone().unwrap_or(Command::Watch(cli::WatchArgs::default()));
+    match command {
+        Command::Watch(args) => commands::watch::run(&cli, args),
+        Command::Trace(args) => commands::trace::run(&cli, args),
+        Command::Top(args) => commands::top::run(&cli, args),
+        Command::Record(args) => commands::record::run(&cli, args),
+        Command::Analyze(args) => commands::analyze::run(&cli, args),
+        Command::Doctor => doctor::run(&cli),
+        Command::Completions(args) => cli::print_completions(args.shell),
+        Command::Version => {
+            println!("shannon {}", env!("CARGO_PKG_VERSION"));
+            println!("commit {}", option_env!("SHANNON_GIT_SHA").unwrap_or("unknown"));
+            println!("abi-version {}", shannon_common::ABI_VERSION);
+            Ok(())
+        }
+    }
+}
+
+/// Errors whose variants map directly to documented exit codes.
+#[derive(Debug, thiserror::Error)]
+pub enum AppError {
+    #[error("{0}")]
+    Config(String),
+    #[error("{0}")]
+    MissingPrivileges(String),
+    #[error("{0}")]
+    Unsupported(String),
+}
+
+impl AppError {
+    const fn exit_code(&self) -> u8 {
+        match self {
+            Self::Config(_) => 64,
+            Self::MissingPrivileges(_) => 77,
+            Self::Unsupported(_) => 78,
+        }
+    }
+}

@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  userspace:
+    name: userspace (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable, beta]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          rustup toolchain install ${{ matrix.toolchain }} --component rustfmt,clippy
+          rustup default ${{ matrix.toolchain }}
+      - name: System deps
+        run: sudo apt-get update && sudo apt-get install -y libelf-dev pkg-config
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -Dwarnings
+      - run: cargo test --workspace --no-fail-fast
+
+  ebpf:
+    name: ebpf (nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install nightly --component rust-src,rustfmt,clippy
+      - run: cargo install bpf-linker --locked
+      - name: System deps
+        run: sudo apt-get update && sudo apt-get install -y clang llvm llvm-dev libclang-dev libelf-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: shannon-ebpf
+      - name: fmt
+        working-directory: shannon-ebpf
+        run: cargo +nightly fmt -- --check
+      - name: clippy
+        working-directory: shannon-ebpf
+        run: cargo +nightly clippy -Z build-std=core --target bpfel-unknown-none -- -Dwarnings
+      - name: build
+        working-directory: shannon-ebpf
+        run: cargo +nightly build -Z build-std=core --target bpfel-unknown-none --release

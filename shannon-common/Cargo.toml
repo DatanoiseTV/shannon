@@ -1,0 +1,28 @@
+[package]
+name         = "shannon-common"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+description  = "Types shared between the shannon userspace and eBPF programs"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = ["std"]
+std     = []
+# When consumed from the eBPF crate, build with `default-features = false`.
+# In that mode we are `no_std` and expose plain-data types with known layouts.
+
+[dependencies]
+# No dependencies in the no_std path — we stay lean and verifier-friendly.
+# std-only conveniences (serde, display impls) live behind `feature = "std"`.
+serde = { workspace = true, optional = true }
+
+[features.full]
+values = []
+
+[lints]
+workspace = true

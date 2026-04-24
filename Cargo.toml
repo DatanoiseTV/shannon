@@ -1,0 +1,113 @@
+[workspace]
+resolver = "2"
+members  = ["shannon", "shannon-common", "xtask"]
+exclude  = ["shannon-ebpf"]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.83"
+license      = "MIT OR Apache-2.0"
+repository   = "https://github.com/syso/shannon"
+homepage     = "https://github.com/syso/shannon"
+authors      = ["shannon contributors"]
+description  = "Zero-instrumentation L7 observability via eBPF"
+keywords     = ["ebpf", "observability", "networking", "tracing"]
+categories   = ["command-line-utilities", "network-programming"]
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn        = "deny"
+rust_2018_idioms              = { level = "warn", priority = -1 }
+missing_debug_implementations = "warn"
+unreachable_pub               = "warn"
+unused_lifetimes              = "warn"
+unused_qualifications         = "warn"
+
+[workspace.lints.clippy]
+pedantic                 = { level = "warn", priority = -1 }
+nursery                  = { level = "warn", priority = -1 }
+# opt-outs that are noise in an application codebase
+module_name_repetitions  = "allow"
+missing_errors_doc       = "allow"
+missing_panics_doc       = "allow"
+must_use_candidate       = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss           = "allow"
+cast_lossless            = "allow"
+cast_precision_loss      = "allow"
+too_many_lines           = "allow"
+multiple_crate_versions  = "allow"
+# opt-ins — hard fail on these
+dbg_macro                = "deny"
+todo                     = "deny"
+unimplemented            = "deny"
+print_stdout             = "warn"   # use tracing for diagnostics; println! is allowed in CLI output via allow attrs
+mem_forget               = "deny"
+rc_mutex                 = "deny"
+undocumented_unsafe_blocks = "warn"
+
+[workspace.dependencies]
+shannon-common = { path = "shannon-common" }
+
+# ---- userspace ----------------------------------------------------------
+aya                    = { version = "0.13", features = ["async_tokio"] }
+aya-log                = "0.2"
+aya-obj                = "0.2"
+tokio                  = { version = "1.41", features = ["rt-multi-thread", "macros", "signal", "sync", "time", "io-util", "io-std", "fs", "net"] }
+tracing                = "0.1"
+tracing-subscriber     = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+anyhow                 = "1"
+thiserror              = "2"
+clap                   = { version = "4.5", features = ["derive", "wrap_help", "env", "string"] }
+clap_complete          = "4.5"
+serde                  = { version = "1", features = ["derive"] }
+serde_json             = "1"
+serde_bytes            = "0.11"
+bytes                  = "1"
+bytemuck               = { version = "1.16", features = ["derive"] }
+libc                   = "0.2"
+ahash                  = "0.8"
+arc-swap               = "1"
+parking_lot            = "0.12"
+regex                  = "1"
+globset                = "0.4"
+time                   = { version = "0.3", features = ["formatting", "macros"] }
+humantime              = "2.1"
+caps                   = "0.5"
+
+# ---- parsing ------------------------------------------------------------
+httparse               = "1.9"
+hpack-patched          = { package = "hpack", version = "0.3" }
+twoway                 = "0.2"
+memchr                 = "2"
+
+# ---- TUI ----------------------------------------------------------------
+ratatui                = "0.29"
+crossterm              = "0.28"
+
+# ---- stats --------------------------------------------------------------
+hdrhistogram           = "7"
+
+# ---- testing ------------------------------------------------------------
+proptest               = "1"
+insta                  = { version = "1", features = ["yaml"] }
+tempfile               = "3"
+rstest                 = "0.23"
+
+[profile.release]
+lto              = "thin"
+codegen-units    = 1
+strip            = "symbols"
+panic            = "abort"
+opt-level        = 3
+
+[profile.release-debug]
+inherits = "release"
+strip    = "none"
+debug    = "full"
+split-debuginfo = "packed"
+
+[profile.dev]
+# make debug builds quick-ish on a 40-core box
+opt-level = 0
+debug     = "limited"
