@@ -37,6 +37,7 @@ pub mod mssql;
 pub mod mqtt;
 pub mod mysql;
 pub mod nats;
+pub mod nfs;
 pub mod ntp;
 pub mod opcua;
 pub mod oracle;

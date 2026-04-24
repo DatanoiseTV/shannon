@@ -62,7 +62,7 @@ See [docs/architecture.md](docs/architecture.md) for how it works and
 
 ## What it decodes today
 
-**47 L7 protocols** span web, databases, messaging, mail, directory,
+**48 L7 protocols** span web, databases, messaging, mail, directory,
 telephony, remote-access, operational-technology, file-sharing, VPN,
 AAA / network-management, and legacy chat.
 
@@ -153,6 +153,7 @@ AAA / network-management, and legacy chat.
 | Protocol | Notes |
 |---|---|
 | SMB2 / SMB3 | TreeConnect share path, Create filename (UCS-2LE), NT_STATUS names |
+| NFS / ONC-RPC | Record-marker framing; NFSv3 / MOUNT / PORTMAP / NLM program + procedure decode |
 | WireGuard | HandshakeInit / Response / CookieReply / TransportData; ephemeral-key preview |
 
 ### TLS runtimes lifted for plaintext

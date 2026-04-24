@@ -44,6 +44,7 @@ use crate::parsers::{
     mssql::{MssqlParser, MssqlParserOutput, MssqlRecord},
     mysql::{MysqlParser, MysqlParserOutput, MysqlRecord},
     nats::{NatsParser, NatsParserOutput, NatsRecord},
+    nfs::{NfsParser, NfsParserOutput, NfsRecord},
     ntp::{NtpParser, NtpParserOutput, NtpRecord},
     opcua::{OpcuaParser, OpcuaParserOutput, OpcuaRecord},
     oracle::{OracleParser, OracleParserOutput, OracleRecord},
@@ -126,6 +127,7 @@ pub enum Protocol {
     Smb,
     WireGuard,
     Irc,
+    Nfs,
     Bypass,
 }
 
@@ -178,6 +180,7 @@ impl Protocol {
             Self::Smb => "smb",
             Self::WireGuard => "wg",
             Self::Irc => "irc",
+            Self::Nfs => "nfs",
             Self::Bypass => "-",
         }
     }
@@ -229,6 +232,7 @@ pub enum AnyRecord {
     Smb(Box<SmbRecord>),
     WireGuard(Box<WireguardRecord>),
     Irc(Box<IrcRecord>),
+    Nfs(Box<NfsRecord>),
 }
 
 impl AnyRecord {
@@ -279,6 +283,7 @@ impl AnyRecord {
             Self::Smb(_) => "smb",
             Self::WireGuard(_) => "wg",
             Self::Irc(_) => "irc",
+            Self::Nfs(_) => "nfs",
         }
     }
 
@@ -329,6 +334,7 @@ impl AnyRecord {
             Self::Smb(r) => r.display_line(),
             Self::WireGuard(r) => r.display_line(),
             Self::Irc(r) => r.display_line(),
+            Self::Nfs(r) => r.display_line(),
         }
     }
 }
@@ -434,6 +440,7 @@ struct ParserSlot {
     smb: Option<SmbParser>,
     wireguard: Option<WireguardParser>,
     irc: Option<IrcParser>,
+    nfs: Option<NfsParser>,
 }
 
 #[derive(Default)]
@@ -532,6 +539,7 @@ impl FlowTable {
             Protocol::Smb => drive_smb(state, dir),
             Protocol::WireGuard => drive_wireguard(state, dir),
             Protocol::Irc => drive_irc(state, dir),
+            Protocol::Nfs => drive_nfs(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -586,6 +594,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         139 | 445 => return Protocol::Smb,
         51820 => return Protocol::WireGuard,
         6667 | 6697 | 7000 => return Protocol::Irc,
+        2049 => return Protocol::Nfs,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1723,6 +1732,29 @@ fn drive_irc(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Irc(Box::new(record)));
             }
             IrcParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_nfs(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.nfs),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.nfs),
+    };
+    let parser = slot.get_or_insert_with(NfsParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            NfsParserOutput::Need => break,
+            NfsParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Nfs(Box::new(record)));
+            }
+            NfsParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }
