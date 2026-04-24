@@ -57,6 +57,7 @@ use crate::parsers::{
     s7comm::{S7Parser, S7ParserOutput, S7Record},
     sip::{SipParser, SipParserOutput, SipRecord},
     smb::{SmbParser, SmbParserOutput, SmbRecord},
+    smpp::{SmppParser, SmppParserOutput, SmppRecord},
     smtp::{SmtpParser, SmtpParserOutput, SmtpRecord},
     snmp::{SnmpParser, SnmpParserOutput, SnmpRecord},
     socks::{SocksParser, SocksParserOutput, SocksRecord},
@@ -130,6 +131,7 @@ pub enum Protocol {
     Irc,
     Nfs,
     Rtsp,
+    Smpp,
     Bypass,
 }
 
@@ -184,6 +186,7 @@ impl Protocol {
             Self::Irc => "irc",
             Self::Nfs => "nfs",
             Self::Rtsp => "rtsp",
+            Self::Smpp => "smpp",
             Self::Bypass => "-",
         }
     }
@@ -237,6 +240,7 @@ pub enum AnyRecord {
     Irc(Box<IrcRecord>),
     Nfs(Box<NfsRecord>),
     Rtsp(Box<RtspRecord>),
+    Smpp(Box<SmppRecord>),
 }
 
 impl AnyRecord {
@@ -289,6 +293,7 @@ impl AnyRecord {
             Self::Irc(_) => "irc",
             Self::Nfs(_) => "nfs",
             Self::Rtsp(_) => "rtsp",
+            Self::Smpp(_) => "smpp",
         }
     }
 
@@ -341,6 +346,7 @@ impl AnyRecord {
             Self::Irc(r) => r.display_line(),
             Self::Nfs(r) => r.display_line(),
             Self::Rtsp(r) => r.display_line(),
+            Self::Smpp(r) => r.display_line(),
         }
     }
 }
@@ -448,6 +454,7 @@ struct ParserSlot {
     irc: Option<IrcParser>,
     nfs: Option<NfsParser>,
     rtsp: Option<RtspParser>,
+    smpp: Option<SmppParser>,
 }
 
 #[derive(Default)]
@@ -548,6 +555,7 @@ impl FlowTable {
             Protocol::Irc => drive_irc(state, dir),
             Protocol::Nfs => drive_nfs(state, dir),
             Protocol::Rtsp => drive_rtsp(state, dir),
+            Protocol::Smpp => drive_smpp(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -604,6 +612,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         6667 | 6697 | 7000 => return Protocol::Irc,
         2049 => return Protocol::Nfs,
         554 | 8554 => return Protocol::Rtsp,
+        2775 => return Protocol::Smpp,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1787,6 +1796,29 @@ fn drive_rtsp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Rtsp(Box::new(record)));
             }
             RtspParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_smpp(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.smpp),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.smpp),
+    };
+    let parser = slot.get_or_insert_with(SmppParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            SmppParserOutput::Need => break,
+            SmppParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Smpp(Box::new(record)));
+            }
+            SmppParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

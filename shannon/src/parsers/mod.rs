@@ -50,6 +50,7 @@ pub mod rtsp;
 pub mod s7comm;
 pub mod sip;
 pub mod smb;
+pub mod smpp;
 pub mod smtp;
 pub mod snmp;
 pub mod socks;

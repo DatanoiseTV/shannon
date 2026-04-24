@@ -62,9 +62,10 @@ See [docs/architecture.md](docs/architecture.md) for how it works and
 
 ## What it decodes today
 
-**49 L7 protocols** span web, databases, messaging, mail, directory,
-telephony, media-streaming, remote-access, operational-technology,
-file-sharing, VPN, AAA / network-management, and legacy chat.
+**50 L7 protocols** span web, databases, messaging, mail, directory,
+telephony, SMS / carrier, media-streaming, remote-access,
+operational-technology, file-sharing, VPN, AAA / network-management,
+and legacy chat.
 
 ### Web + APIs
 
@@ -121,6 +122,7 @@ file-sharing, VPN, AAA / network-management, and legacy chat.
 | SOCKS4 / SOCKS5 | CONNECT / BIND / UDP-ASSOCIATE with DOMAIN / IPv4 / IPv6 |
 | SIP | INVITE / REGISTER / ... with Call-ID + Via + From/To + User-Agent |
 | RTSP | DESCRIBE / SETUP / PLAY / TEARDOWN on IP cameras + media servers |
+| SMPP | SMS peer-to-peer: bind_* (system_id + redacted password), submit_sm |
 | IRC | PASS (redacted) / NICK / USER / JOIN / PRIVMSG / numeric replies |
 
 ### Operational-technology (ICS / SCADA / building automation)

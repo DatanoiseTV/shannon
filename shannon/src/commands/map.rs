@@ -166,6 +166,7 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
             crate::parsers::rtsp::RtspKind::Request { uri, .. } => Some(uri.clone()),
             _ => None,
         }),
+        AnyRecord::Smpp(s) => ("smpp", s.system_id.clone()),
     }
 }
 
