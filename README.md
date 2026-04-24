@@ -62,8 +62,9 @@ See [docs/architecture.md](docs/architecture.md) for how it works and
 
 ## What it decodes today
 
-**42 L7 protocols** span web, databases, messaging, mail, directory,
-telephony, remote-access, operational-technology, and AAA/auth.
+**46 L7 protocols** span web, databases, messaging, mail, directory,
+telephony, remote-access, operational-technology, file-sharing, VPN,
+and AAA / network-management.
 
 ### Web + APIs
 
@@ -132,7 +133,7 @@ telephony, remote-access, operational-technology, and AAA/auth.
 | OPC-UA | IEC 62541-6 §7.1.2 binary framing (tcp/4840) |
 | BACnet/IP | BVLC + NPDU + APDU; readProperty / writeProperty / Who-Is / I-Am |
 
-### Infrastructure + auth
+### Infrastructure + auth + management
 
 | Protocol | Notes |
 |---|---|
@@ -141,8 +142,17 @@ telephony, remote-access, operational-technology, and AAA/auth.
 | TFTP | RRQ / WRQ / DATA / ACK / ERROR / OACK with options |
 | NTP | Full 48-byte header; stratum / mode / ref_id (GPS, PPS, LOCL) |
 | RADIUS | Access-Request / Accept / Reject; User-Name + Called/Calling-Station |
+| TACACS+ | AUTHEN / AUTHOR / ACCT; flags incl. UNENCRYPTED warning |
+| SNMP v1/v2c | Version + community string + PDU type + first OID |
 | Syslog | RFC 3164 + RFC 5424 + RFC 6587 octet-counted framing |
 | SSDP | UDP discovery (mDNS-adjacent) |
+
+### File sharing + VPN
+
+| Protocol | Notes |
+|---|---|
+| SMB2 / SMB3 | TreeConnect share path, Create filename (UCS-2LE), NT_STATUS names |
+| WireGuard | HandshakeInit / Response / CookieReply / TransportData; ephemeral-key preview |
 
 ### TLS runtimes lifted for plaintext
 
