@@ -15,11 +15,13 @@
 //! surfaces can carry protocol-specific fields.
 
 pub mod cassandra;
+pub mod dns;
 pub mod http1;
 pub mod http2;
 pub mod imap;
 pub mod kafka;
 pub mod memcached;
+pub mod modbus;
 pub mod mongodb;
 pub mod mqtt;
 pub mod mysql;
