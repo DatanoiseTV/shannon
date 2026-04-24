@@ -19,6 +19,7 @@ mod file_dump;
 mod flow;
 mod logging;
 mod parsers;
+mod pcap;
 mod proto;
 mod runtime;
 mod secrets;

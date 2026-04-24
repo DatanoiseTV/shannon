@@ -279,6 +279,13 @@ pub struct TraceArgs {
     #[arg(long = "dump-files", value_name = "DIR")]
     pub dump_files_dir: Option<PathBuf>,
 
+    /// Also write synthesised IP/TCP frames (plaintext payloads) to this
+    /// pcap file. Opens in Wireshark / tshark / Zeek directly — linktype
+    /// is `LINKTYPE_RAW` (raw IP). For TLS-over-libssl flows the pcap
+    /// holds the plaintext from the uprobe boundary, not the wire bytes.
+    #[arg(long = "pcap", value_name = "FILE")]
+    pub pcap_file: Option<PathBuf>,
+
     #[command(flatten)]
     pub filter: FilterArgs,
 }

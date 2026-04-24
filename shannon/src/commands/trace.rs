@@ -15,6 +15,7 @@ use crate::events::{DecodedEvent, Direction};
 use crate::file_dump::FileDumper;
 use crate::flow::{AnyRecord, FlowKey, FlowTable};
 use crate::parsers::http1::RecordKind as Http1Kind;
+use crate::pcap::{Direction as PcapDirection, PcapWriter};
 use crate::runtime::{FilterSetup, Runtime};
 use crate::secrets;
 
@@ -48,13 +49,20 @@ async fn run_async(args: TraceArgs) -> Result<()> {
         None => None,
     };
 
+    // Pcap writer — synthesises IP/TCP frames for each TCP/TLS data event.
+    let mut pcap = match args.pcap_file.as_ref() {
+        Some(p) => Some(PcapWriter::create(p)?),
+        None => None,
+    };
+
     banner(&args, &filter);
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => break,
             maybe = runtime.events_rx.recv() => match maybe {
                 Some(ev) => handle_event(
-                    &mut out, &mut flows, &dns, catalog.as_deref(), dumper.as_mut(), &args, &ev, color,
+                    &mut out, &mut flows, &dns, catalog.as_deref(),
+                    dumper.as_mut(), pcap.as_mut(), &args, &ev, color,
                 )?,
                 None => break,
             }
@@ -62,6 +70,11 @@ async fn run_async(args: TraceArgs) -> Result<()> {
     }
     if let Some(d) = dumper.as_ref() {
         eprintln!("shannon: dumped {} file(s)", d.count());
+    }
+    if let Some(mut pw) = pcap {
+        let n = pw.packets();
+        pw.flush()?;
+        eprintln!("shannon: wrote {n} packet(s) to pcap");
     }
 
     if let (Some(cat), Some(path)) = (catalog.as_ref(), args.catalog_file.as_ref()) {
@@ -109,6 +122,7 @@ fn handle_event(
     dns: &DnsCache,
     catalog: Option<&ApiCatalog>,
     dumper: Option<&mut FileDumper>,
+    pcap: Option<&mut PcapWriter>,
     args: &TraceArgs,
     ev: &DecodedEvent,
     color: bool,
@@ -120,6 +134,14 @@ fn handle_event(
             if args.scan_secrets {
                 scan_and_warn(out, "tcp", ctx.tgid, &ctx.comm, &d.data)?;
             }
+            if let Some(pw) = pcap {
+                let dir = match d.direction {
+                    Direction::Tx => PcapDirection::ClientToServer,
+                    Direction::Rx => PcapDirection::ServerToClient,
+                };
+                let _ =
+                    pw.write_segment(d.src.0, d.src.1, d.dst.0, d.dst.1, dir, &d.data);
+            }
             let key = FlowKey::Tcp { pid: ctx.tgid, sock_id: d.sock_id };
             flows.hint_port(key.clone(), d.dst.1);
             let peer = format!("{}:{}", d.dst.0, d.dst.1);
@@ -130,6 +152,9 @@ fn handle_event(
             if args.scan_secrets {
                 scan_and_warn(out, "tls", ctx.tgid, &ctx.comm, &d.data)?;
             }
+            // TLS events don't carry a real 4-tuple — the uprobe fires at
+            // the libssl boundary with a conn_id instead. Pcap synthesis
+            // requires a 4-tuple, so we skip TLS events in the pcap path.
             let key = FlowKey::Tls { pid: ctx.tgid, conn_id: d.conn_id };
             let peer = format!("tls:{:x}", d.conn_id);
             let records = flows.feed(key, d.direction, &d.data);
