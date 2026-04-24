@@ -48,6 +48,8 @@ crossterm           = { workspace = true }
 hdrhistogram        = { workspace = true }
 prost-reflect       = { version = "0.14", features = ["serde"] }
 protox              = "0.7"
+zstd                = "0.13"
+flate2              = "1"
 
 [dev-dependencies]
 proptest   = { workspace = true }

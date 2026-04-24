@@ -8,6 +8,7 @@
 // fighting the default lint set while modules are still being connected up.
 #![allow(dead_code)]
 
+mod api_catalog;
 mod cli;
 mod commands;
 mod config;
