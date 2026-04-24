@@ -126,6 +126,12 @@ pub struct FilterArgs {
     /// Include shannon's own traffic in the output. Off by default.
     #[arg(long = "include-self", default_value_t = false)]
     pub include_self: bool,
+
+    /// With `--pid`: also match processes that fork from a matched
+    /// process (transitively). Implemented via a `sched_process_fork`
+    /// tracepoint that copies parents into children at fork time.
+    #[arg(long = "follow-children", default_value_t = false)]
+    pub follow_children: bool,
 }
 
 #[derive(Clone, Debug, ValueEnum, PartialEq, Eq, Hash)]

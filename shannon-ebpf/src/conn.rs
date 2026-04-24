@@ -137,6 +137,17 @@ fn try_state(ctx: &TracePointContext) -> Result<(), i64> {
     }
 
     let sk: u64 = unsafe { ctx.read_at(TP_SKADDR) }?;
+    // Look up stashed task info *first*: in softirq context current is the
+    // idle task, so filtering by current tgid would either leak every
+    // connection (filter-by-0 collision) or mis-match. The SOCKS entry
+    // carries the real tgid recorded at tcp_*_connect time.
+    let pre_info = unsafe { SOCKS.get(&sk) }.copied();
+    if let Some(i) = pre_info {
+        if util::filtered_out(i.tgid) {
+            return Ok(());
+        }
+    }
+
     let sport: u16 = unsafe { ctx.read_at(TP_SPORT) }?;
     // dport is stored as raw network-byte-order in the tracepoint. Read as
     // two bytes and compose host-order explicitly — `u16::swap_bytes` on the
@@ -152,7 +163,7 @@ fn try_state(ctx: &TracePointContext) -> Result<(), i64> {
     // Look up stashed info from tcp_{v4,v6}_connect. Missing entries happen
     // for accepted inbound connections; userspace flags those rather than
     // showing the softirq `swapper` comm.
-    let info_opt = unsafe { SOCKS.get(&sk) }.copied();
+    let info_opt = pre_info;
     let (pid, tgid, comm) =
         info_opt.map_or((0u32, 0u32, [0u8; COMM_LEN]), |i| (i.pid, i.tgid, i.comm));
 

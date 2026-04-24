@@ -18,21 +18,31 @@ use tokio::signal;
 
 use crate::cli::{Cli, TraceArgs};
 use crate::events::{DecodedEvent, Direction};
-use crate::runtime::Runtime;
+use crate::runtime::{FilterSetup, Runtime};
 
-pub fn run(_cli: &Cli, _args: TraceArgs) -> Result<()> {
-    // Tokio with a shared runtime; the ring-buffer reader uses its own
-    // OS thread because aya's ringbuf is sync.
+pub fn run(_cli: &Cli, args: TraceArgs) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-    rt.block_on(async move { run_async().await })
+    rt.block_on(async move { run_async(args).await })
 }
 
-async fn run_async() -> Result<()> {
-    let mut runtime = Runtime::start()?;
+async fn run_async(args: TraceArgs) -> Result<()> {
+    let filter = FilterSetup {
+        pids: args.filter.pid.clone(),
+        follow_children: args.filter.follow_children,
+    };
+    let mut runtime = Runtime::start_with(&filter)?;
     let mut out = std::io::stdout().lock();
     let color = std::io::stdout().is_terminal();
 
-    eprintln!("shannon: attached. press ctrl-c to stop.");
+    if !filter.pids.is_empty() {
+        eprintln!(
+            "shannon: attached, filter: pids={:?}{}",
+            filter.pids,
+            if filter.follow_children { " (+children)" } else { "" }
+        );
+    } else {
+        eprintln!("shannon: attached. press ctrl-c to stop.");
+    }
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => break,
@@ -69,23 +79,21 @@ fn render_event(out: &mut impl Write, ev: &DecodedEvent, _color: bool) -> std::i
             c.bytes_recv,
             c.rtt_us,
         ),
-        DecodedEvent::TcpData(ctx, d) => {
-            writeln!(
-                out,
-                "{}  TCP{}  pid={} comm={:<15}  {}:{} {} {}:{}  {} B{}",
-                wall_clock(),
-                arrow(d.direction),
-                ctx.tgid,
-                truncate(&ctx.comm, 15),
-                fmt_ip(&d.src.0),
-                d.src.1,
-                dir_arrow(d.direction),
-                fmt_ip(&d.dst.0),
-                d.dst.1,
-                d.total_bytes,
-                preview(&d.data),
-            )
-        }
+        DecodedEvent::TcpData(ctx, d) => writeln!(
+            out,
+            "{}  TCP{}  pid={} comm={:<15}  {}:{} {} {}:{}  {} B{}",
+            wall_clock(),
+            arrow(d.direction),
+            ctx.tgid,
+            truncate(&ctx.comm, 15),
+            fmt_ip(&d.src.0),
+            d.src.1,
+            dir_arrow(d.direction),
+            fmt_ip(&d.dst.0),
+            d.dst.1,
+            d.total_bytes,
+            preview(&d.data),
+        ),
         DecodedEvent::TlsData(ctx, d) => writeln!(
             out,
             "{}  TLS{}  pid={} comm={:<15}  lib={}  {} B{}",

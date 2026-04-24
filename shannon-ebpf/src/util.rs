@@ -49,24 +49,29 @@ pub fn is_self() -> bool {
     unsafe { SELF_PID.get(&tgid).is_some() }
 }
 
-/// Returns `true` when the PID_FILTER is non-empty and the current tgid is
-/// not in it (i.e. we should drop this event).
+/// Sentinel key in [`PID_FILTER`] indicating the filter is active. We use
+/// `u32::MAX` rather than `0` because `0` is a legal PID (swapper / softirq
+/// context), so using `0` as the sentinel collides with kernel-context
+/// traffic observed via tracepoints.
+const FILTER_SENTINEL: u32 = u32::MAX;
+
+/// Returns `true` when the PID_FILTER is active and the given tgid is not
+/// in it.
 #[inline(always)]
-pub fn filtered_out_by_pid() -> bool {
-    // Peek at entry 0 of the filter map as a probe: if any entry exists,
-    // the filter is active and we require the current tgid to be present.
-    //
-    // We can't cheaply count entries from BPF, so we adopt a conservative
-    // rule: if a well-known "sentinel" key is present (written by userspace
-    // when the filter is enabled), we require membership.
-    let tgid = (bpf_get_current_pid_tgid() >> 32) as u32;
+pub fn filtered_out(tgid: u32) -> bool {
     unsafe {
-        // Sentinel key `0` indicates "filter active". Userspace sets this
-        // when any --pid argument is passed; clears it otherwise.
-        if PID_FILTER.get(&0u32).is_some() {
+        if PID_FILTER.get(&FILTER_SENTINEL).is_some() {
             PID_FILTER.get(&tgid).is_none()
         } else {
             false
         }
     }
+}
+
+/// Legacy wrapper for paths that *do* run in user context (kprobes in the
+/// caller's task), where `bpf_get_current_pid_tgid` gives the right answer.
+#[inline(always)]
+pub fn filtered_out_by_pid() -> bool {
+    let tgid = (bpf_get_current_pid_tgid() >> 32) as u32;
+    filtered_out(tgid)
 }

@@ -33,6 +33,18 @@ critical path.
 | 24 | TLS uprobes — OpenSSL / BoringSSL | ⏳ |
 | 25 | TLS uprobes — Go crypto/tls (binary symbol scan) | ⏳ |
 
+## v0.2 features requested after v0.1 kickoff
+
+| Area | Notes |
+|------|-------|
+| `--pid N --follow-children` | Attach to PID + transitively track fork/clone children via `sched_process_fork`. |
+| `shannon target CMD...` | Spawn `CMD`, auto-filter to that tree only. |
+| `--dump-files DIR` | Extract file bodies from HTTP multipart / direct uploads / gRPC streams into DIR for later reverse engineering. |
+| gRPC proto inference | Infer `.proto` schemas from observed protobuf wire bytes + method names; emit editable `.proto` files. |
+| Certificate pinning detection | Capture server cert chain during TLS handshake, compare against system CA trust store, flag pinned / self-signed / unknown-CA chains. |
+| Rogue CA detection | Warn when a cert chain roots to a CA not in the system trust store (possible interception). |
+| WebRTC signalling | SDP recognition inside HTTP/WS bodies; STUN/TURN packet parsing. |
+
 ## v0.2 — protocol breadth
 
 | Area | Notes |

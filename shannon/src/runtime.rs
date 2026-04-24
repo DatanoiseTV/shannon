@@ -41,10 +41,26 @@ pub struct Runtime {
     pub events_rx: mpsc::Receiver<DecodedEvent>,
 }
 
+/// Process-filtering options applied at BPF-load time.
+#[derive(Default, Debug, Clone)]
+pub struct FilterSetup {
+    /// When non-empty, only events from these TGIDs are emitted.
+    pub pids: Vec<u32>,
+    /// When true, attach the fork tracepoint so children of any filtered
+    /// PID are auto-added at runtime.
+    pub follow_children: bool,
+}
+
 impl Runtime {
     /// Load the embedded BPF object, attach all programs, and start the
     /// event pump task. Events are delivered on the returned receiver.
     pub fn start() -> Result<Self> {
+        Self::start_with(&FilterSetup::default())
+    }
+
+    /// Variant that applies CLI filter options to the BPF maps before the
+    /// event pump starts.
+    pub fn start_with(filter: &FilterSetup) -> Result<Self> {
         // Growing the memlock ceiling is only required on pre-5.11 kernels,
         // but doing it unconditionally is harmless.
         if let Err(err) = bump_memlock_rlimit() {
@@ -62,6 +78,11 @@ impl Runtime {
         // Tell the kernel who we are so SELF_PID filtering works.
         set_self_pid(&mut bpf)?;
 
+        // Populate PID_FILTER (sentinel key 0 means "filter active").
+        if !filter.pids.is_empty() {
+            set_pid_filter(&mut bpf, &filter.pids)?;
+        }
+
         // Attach probes. Each call is separate so errors point at the
         // specific probe that failed, not the whole batch.
         attach_kprobe(&mut bpf, "tcp_v4_connect", "tcp_v4_connect")?;
@@ -70,6 +91,10 @@ impl Runtime {
         attach_kprobe(&mut bpf, "tcp_sendmsg", "tcp_sendmsg")?;
         attach_kprobe(&mut bpf, "tcp_recvmsg", "tcp_recvmsg")?;
         attach_kretprobe(&mut bpf, "tcp_recvmsg_ret", "tcp_recvmsg")?;
+
+        if filter.follow_children {
+            attach_tracepoint(&mut bpf, "sched_process_fork", "sched", "sched_process_fork")?;
+        }
 
         // TLS: attach to every libssl we can find on the host. Missing is
         // a warning, not a fatal error — a box without TLS libs is still
@@ -108,6 +133,18 @@ fn set_self_pid(bpf: &mut Ebpf) -> Result<()> {
         BpfHashMap::try_from(bpf.map_mut("SELF_PID").context("map SELF_PID missing")?)?;
     let tgid = std::process::id();
     self_pid.insert(tgid, 1u8, 0).context("writing SELF_PID entry")?;
+    Ok(())
+}
+
+fn set_pid_filter(bpf: &mut Ebpf, pids: &[u32]) -> Result<()> {
+    let mut filter: BpfHashMap<&mut MapData, u32, u8> =
+        BpfHashMap::try_from(bpf.map_mut("PID_FILTER").context("map PID_FILTER missing")?)?;
+    // Sentinel u32::MAX means "filter active" — we can't use 0 because
+    // softirq context reports tgid=0 and would collide.
+    filter.insert(u32::MAX, 1u8, 0).context("writing PID_FILTER sentinel")?;
+    for &pid in pids {
+        filter.insert(pid, 1u8, 0).with_context(|| format!("writing PID_FILTER[{pid}]"))?;
+    }
     Ok(())
 }
 
