@@ -43,6 +43,9 @@ pub struct SockInfo {
     pub bytes_sent: u64,
     pub bytes_recv: u64,
     pub started_ns: u64,
+    /// `task_struct.comm` captured at the `tcp_*_connect` kprobe — the
+    /// `inet_sock_set_state` tracepoint runs in softirq and cannot get it.
+    pub comm: [u8; 16],
 }
 
 #[map]

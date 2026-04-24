@@ -9,7 +9,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use aya::Ebpf;
 use aya::maps::{HashMap as BpfHashMap, MapData, RingBuf};
-use aya::programs::TracePoint;
+use aya::programs::{KProbe, TracePoint};
 use tokio::sync::mpsc;
 
 use shannon_common::EventHeader;
@@ -62,8 +62,10 @@ impl Runtime {
         // Tell the kernel who we are so SELF_PID filtering works.
         set_self_pid(&mut bpf)?;
 
-        // Attach tracepoints / kprobes. Each attachment is its own call so we
-        // can give specific error messages.
+        // Attach probes. Each call is separate so errors point at the
+        // specific probe that failed, not the whole batch.
+        attach_kprobe(&mut bpf, "tcp_v4_connect", "tcp_v4_connect")?;
+        attach_kprobe(&mut bpf, "tcp_v6_connect", "tcp_v6_connect")?;
         attach_tracepoint(&mut bpf, "inet_sock_set_state", "sock", "inet_sock_set_state")?;
 
         // Spin up the ring-buffer reader.
@@ -109,6 +111,18 @@ fn attach_tracepoint(
     prog.load().with_context(|| format!("loading {program}"))?;
     prog.attach(category, name)
         .with_context(|| format!("attaching {program} to {category}:{name}"))?;
+    Ok(())
+}
+
+fn attach_kprobe(bpf: &mut Ebpf, program: &str, function: &str) -> Result<()> {
+    let prog: &mut KProbe = bpf
+        .program_mut(program)
+        .with_context(|| format!("program {program} not in BPF object"))?
+        .try_into()
+        .with_context(|| format!("program {program} is not a KProbe"))?;
+    prog.load().with_context(|| format!("loading {program}"))?;
+    prog.attach(function, 0)
+        .with_context(|| format!("attaching {program} to kernel function {function}"))?;
     Ok(())
 }
 

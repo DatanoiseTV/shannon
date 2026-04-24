@@ -1,21 +1,27 @@
-//! Connection-lifecycle probe.
+//! Connection-lifecycle probes.
 //!
-//! We attach a single tracepoint — `sock:inet_sock_set_state` — which fires
-//! on every TCP state transition system-wide. From the state machine we
-//! emit:
+//! Three attachments cooperate to get accurate per-connection attribution:
 //!
-//! - `ConnStart` on `* -> TCP_ESTABLISHED`
-//! - `ConnEnd`   on `* -> TCP_CLOSE`
-//!
-//! Other transitions are ignored; they're interesting for forensic tools
-//! but noisy for service-level observability.
+//! 1. `kprobe:tcp_v4_connect` and `kprobe:tcp_v6_connect` fire in the
+//!    originating userspace task's context. Their first argument is the
+//!    `struct sock *sk`. We stash `{pid, tgid, comm}` against that pointer
+//!    in the `SOCKS` LRU map — this is the only reliable way to know who
+//!    opened the connection.
+//! 2. `tracepoint:sock:inet_sock_set_state` observes state transitions
+//!    system-wide. When a socket moves to `TCP_ESTABLISHED` we emit a
+//!    `ConnStart` event enriched with the PID we previously recorded; the
+//!    handler itself runs in softirq context where `current` is usually
+//!    the per-CPU idle task, so we never trust `bpf_get_current_pid_tgid()`
+//!    here.
+//! 3. On `TCP_CLOSE` we emit `ConnEnd` and drop the entry from `SOCKS`.
 
 use aya_ebpf::{
-    macros::tracepoint,
-    programs::TracePointContext,
+    helpers::{bpf_get_current_comm, bpf_get_current_pid_tgid, bpf_ktime_get_ns},
+    macros::{kprobe, tracepoint},
+    programs::{ProbeContext, TracePointContext},
 };
 
-use shannon_common::{ConnEndPayload, ConnStartPayload, EventKind, HEADER_SIZE};
+use shannon_common::{COMM_LEN, ConnEndPayload, ConnStartPayload, EventKind, HEADER_SIZE};
 
 use crate::{
     maps::{EVENTS, SOCKS, SockInfo},
@@ -23,25 +29,10 @@ use crate::{
 };
 
 // ---------------------------------------------------------------------------
-// Tracepoint field layout — from /sys/kernel/tracing/events/sock/
-// inet_sock_set_state/format on a 6.12 kernel.
-//
-//   field:unsigned short common_type;         offset:0;  size:2;
-//   field:unsigned char common_flags;         offset:2;  size:1;
-//   field:unsigned char common_preempt_count; offset:3;  size:1;
-//   field:int common_pid;                     offset:4;  size:4;
-//
-//   field:const void * skaddr;                offset:8;  size:8;
-//   field:int oldstate;                       offset:16; size:4;
-//   field:int newstate;                       offset:20; size:4;
-//   field:__u16 sport;                        offset:24; size:2;
-//   field:__u16 dport;                        offset:26; size:2;
-//   field:__u16 family;                       offset:28; size:2;
-//   field:__u16 protocol;                     offset:30; size:2;
-//   field:__u8 saddr[4];                      offset:32; size:4;
-//   field:__u8 daddr[4];                      offset:36; size:4;
-//   field:__u8 saddr_v6[16];                  offset:40; size:16;
-//   field:__u8 daddr_v6[16];                  offset:56; size:16;
+// Tracepoint field offsets — from /sys/kernel/tracing/events/sock/
+// inet_sock_set_state/format on a 6.12 kernel. These are stable across
+// modern kernels; we deliberately hardcode the offsets rather than drag in
+// a BTF-relocated struct descriptor for a 60-byte tracepoint.
 // ---------------------------------------------------------------------------
 
 const TP_SKADDR: usize = 8;
@@ -62,15 +53,77 @@ const TCP_CLOSE: i32 = 7;
 const AF_INET: u16 = 2;
 const AF_INET6: u16 = 10;
 
+// ---------------------------------------------------------------------------
+// kprobe: tcp_v4_connect / tcp_v6_connect
+// ---------------------------------------------------------------------------
+
+#[kprobe]
+pub fn tcp_v4_connect(ctx: ProbeContext) -> u32 {
+    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
+    stash_pid(sk);
+    0
+}
+
+#[kprobe]
+pub fn tcp_v6_connect(ctx: ProbeContext) -> u32 {
+    let Some(sk) = ctx.arg::<u64>(0) else { return 1 };
+    stash_pid(sk);
+    0
+}
+
+#[inline(always)]
+fn stash_pid(sk: u64) {
+    if util::is_self() {
+        return;
+    }
+    let pid_tgid = bpf_get_current_pid_tgid();
+    let pid = pid_tgid as u32;
+    let tgid = (pid_tgid >> 32) as u32;
+    let comm = bpf_get_current_comm().unwrap_or([0u8; COMM_LEN]);
+
+    // Merge with any existing entry; `inet_sock_set_state` may have been
+    // seen first on some paths and we don't want to wipe its address info.
+    let existing = unsafe { SOCKS.get(&sk) }.copied();
+    let info = match existing {
+        Some(mut i) => {
+            i.pid = pid;
+            i.tgid = tgid;
+            i.comm = comm;
+            i
+        }
+        None => SockInfo {
+            sock_id: sk,
+            pid,
+            tgid,
+            sport: 0,
+            dport: 0,
+            family: 0,
+            protocol: 0,
+            _pad: [0; 2],
+            saddr: [0; 16],
+            daddr: [0; 16],
+            bytes_sent: 0,
+            bytes_recv: 0,
+            started_ns: unsafe { bpf_ktime_get_ns() },
+            comm,
+        },
+    };
+    let _ = SOCKS.insert(&sk, &info, 0);
+}
+
+// ---------------------------------------------------------------------------
+// tracepoint: sock:inet_sock_set_state
+// ---------------------------------------------------------------------------
+
 #[tracepoint]
 pub fn inet_sock_set_state(ctx: TracePointContext) -> u32 {
-    match try_inet_sock_set_state(&ctx) {
+    match try_state(&ctx) {
         Ok(()) => 0,
         Err(_) => 1,
     }
 }
 
-fn try_inet_sock_set_state(ctx: &TracePointContext) -> Result<(), i64> {
+fn try_state(ctx: &TracePointContext) -> Result<(), i64> {
     let oldstate: i32 = unsafe { ctx.read_at(TP_OLDSTATE) }?;
     let newstate: i32 = unsafe { ctx.read_at(TP_NEWSTATE) }?;
 
@@ -78,39 +131,64 @@ fn try_inet_sock_set_state(ctx: &TracePointContext) -> Result<(), i64> {
     if newstate != TCP_ESTABLISHED && newstate != TCP_CLOSE {
         return Ok(());
     }
-    // Filter out CLOSE transitions that weren't from a LIVE state; those are
-    // listener-socket teardowns we don't care about.
     if newstate == TCP_CLOSE && oldstate != TCP_ESTABLISHED {
+        // Listen-socket teardown or failed connect — not interesting here.
         return Ok(());
     }
 
-    if util::is_self() || util::filtered_out_by_pid() {
-        return Ok(());
-    }
-
-    let skaddr: u64 = unsafe { ctx.read_at(TP_SKADDR) }?;
-    // The kernel stores `sport` in host byte order (`sk->sk_num`) and `dport`
-    // in network byte order (`sk->sk_dport`). We forward both raw — userspace
-    // does the `u16::from_be` so the BPF bytecode stays minimal.
+    let sk: u64 = unsafe { ctx.read_at(TP_SKADDR) }?;
     let sport: u16 = unsafe { ctx.read_at(TP_SPORT) }?;
-    let dport: u16 = unsafe { ctx.read_at(TP_DPORT) }?;
+    // dport is stored as raw network-byte-order in the tracepoint. Read as
+    // two bytes and compose host-order explicitly — `u16::swap_bytes` on the
+    // BPF target is sometimes elided by the optimiser.
+    let dport_hi: u8 = unsafe { ctx.read_at(TP_DPORT) }?;
+    let dport_lo: u8 = unsafe { ctx.read_at(TP_DPORT + 1) }?;
+    let dport = (u16::from(dport_hi) << 8) | u16::from(dport_lo);
+
     let family: u16 = unsafe { ctx.read_at(TP_FAMILY) }?;
     let protocol_u16: u16 = unsafe { ctx.read_at(TP_PROTOCOL) }?;
-
     let (saddr, daddr) = read_addrs(ctx, family)?;
 
+    // Look up stashed info from tcp_{v4,v6}_connect. Missing entries happen
+    // for accepted inbound connections; userspace flags those rather than
+    // showing the softirq `swapper` comm.
+    let info_opt = unsafe { SOCKS.get(&sk) }.copied();
+    let (pid, tgid, comm) =
+        info_opt.map_or((0u32, 0u32, [0u8; COMM_LEN]), |i| (i.pid, i.tgid, i.comm));
+
     if newstate == TCP_ESTABLISHED {
+        let info = SockInfo {
+            sock_id: sk,
+            pid,
+            tgid,
+            sport,
+            dport,
+            family: (family & 0xFF) as u8,
+            protocol: (protocol_u16 & 0xFF) as u8,
+            _pad: [0; 2],
+            saddr,
+            daddr,
+            bytes_sent: 0,
+            bytes_recv: 0,
+            started_ns: unsafe { bpf_ktime_get_ns() },
+            comm,
+        };
+        let _ = SOCKS.insert(&sk, &info, 0);
         emit_conn_start(
-            skaddr,
+            sk,
             (family & 0xFF) as u8,
             (protocol_u16 & 0xFF) as u8,
             sport,
             dport,
             saddr,
             daddr,
+            pid,
+            tgid,
+            comm,
         );
     } else {
-        emit_conn_end(skaddr);
+        emit_conn_end(sk);
+        let _ = SOCKS.remove(&sk);
     }
     Ok(())
 }
@@ -130,6 +208,7 @@ fn read_addrs(ctx: &TracePointContext, family: u16) -> Result<([u8; 16], [u8; 16
     Ok((s, d))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_conn_start(
     sock_id: u64,
     family: u8,
@@ -138,32 +217,22 @@ fn emit_conn_start(
     dport: u16,
     saddr: [u8; 16],
     daddr: [u8; 16],
+    pid: u32,
+    tgid: u32,
+    comm: [u8; COMM_LEN],
 ) {
-    // Remember the socket so later data events can attribute bytes to it.
-    let info = SockInfo {
-        sock_id,
-        pid: 0,
-        tgid: 0,
-        sport,
-        dport,
-        family,
-        protocol,
-        _pad: [0; 2],
-        saddr,
-        daddr,
-        bytes_sent: 0,
-        bytes_recv: 0,
-        started_ns: unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() },
-    };
-    let _ = SOCKS.insert(&sock_id, &info, 0);
-
     let Some(mut entry) = EVENTS.reserve::<Event<ConnStartPayload>>(0) else {
         return;
     };
     let ev = entry.as_mut_ptr();
     unsafe {
         let mut header = util::fill_header(EventKind::ConnStart);
-        header.total_len = core::mem::size_of::<Event<ConnStartPayload>>() as u32;
+        if pid != 0 {
+            header.pid = pid;
+            header.tgid = tgid;
+            header.comm = comm;
+        }
+        header.total_len = size_of::<Event<ConnStartPayload>>() as u32;
         (*ev).header = header;
         (*ev).payload = ConnStartPayload {
             protocol,
@@ -181,15 +250,20 @@ fn emit_conn_start(
 
 fn emit_conn_end(sock_id: u64) {
     let info = unsafe { SOCKS.get(&sock_id) }.copied();
-    let _ = SOCKS.remove(&sock_id);
-
     let Some(mut entry) = EVENTS.reserve::<Event<ConnEndPayload>>(0) else {
         return;
     };
     let ev = entry.as_mut_ptr();
     unsafe {
         let mut header = util::fill_header(EventKind::ConnEnd);
-        header.total_len = core::mem::size_of::<Event<ConnEndPayload>>() as u32;
+        if let Some(i) = info {
+            if i.pid != 0 {
+                header.pid = i.pid;
+                header.tgid = i.tgid;
+                header.comm = i.comm;
+            }
+        }
+        header.total_len = size_of::<Event<ConnEndPayload>>() as u32;
         (*ev).header = header;
         (*ev).payload = ConnEndPayload {
             sock_id,
@@ -202,15 +276,15 @@ fn emit_conn_end(sock_id: u64) {
     entry.submit(0);
 }
 
-/// Small generic to keep `emit_conn_start` / `emit_conn_end` tidy.
+/// Small generic to keep `emit_conn_*` tidy.
 #[repr(C)]
 pub struct Event<P: Copy> {
     pub header: shannon_common::EventHeader,
     pub payload: P,
 }
 
-// Compile-time check that our event frames always start with a full header.
+// Compile-time check that every event frame begins with a full header.
 const _: () = {
     assert!(core::mem::offset_of!(Event<ConnStartPayload>, header) == 0);
-    assert!(core::mem::size_of::<shannon_common::EventHeader>() == HEADER_SIZE);
+    assert!(size_of::<shannon_common::EventHeader>() == HEADER_SIZE);
 };

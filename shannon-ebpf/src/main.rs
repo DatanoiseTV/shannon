@@ -32,4 +32,4 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 // Re-export program entry points so aya can find them by name. aya attaches
 // BPF programs by their `#[<program_type>]`-annotated function symbol, but
 // `#[used]` via re-export keeps the compiler from eliding them.
-pub use conn::inet_sock_set_state;
+pub use conn::{inet_sock_set_state, tcp_v4_connect, tcp_v6_connect};
