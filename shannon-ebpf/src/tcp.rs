@@ -51,12 +51,31 @@ struct PendingRecv {
 static PENDING_RECV: HashMap<u64, PendingRecv> =
     HashMap::with_max_entries(16_384, aya_ebpf::bindings::BPF_F_NO_PREALLOC);
 
-// Offsets derived from x86_64 Linux 6.12 headers. If a target kernel
-// changes these we'd see verifier failures or garbage data; both are loud.
+// Offsets derived from x86_64 Linux 6.12 BTF. If a target kernel changes
+// these we'd see verifier failures or garbage data; both are loud.
+//
+//   struct msghdr { ...; struct iov_iter msg_iter; ... }
+//     msg_iter at offset 16
+//
+//   struct iov_iter {
+//     u8 iter_type;        // 0
+//     u8 flags[3];         // 1..=3
+//     size_t iov_offset;   // 8
+//     union {
+//       struct iovec __ubuf_iovec;        // ITER_UBUF variant
+//       struct { const struct iovec *__iov; size_t count; };  // ITER_IOVEC
+//     };                                  // offset 16..=31
+//     ...
+//   }
 const MSGHDR_IOV_ITER_OFF: usize = 16;
-const IOV_ITER_IOV_OFF: usize = 16;
+const IOV_ITER_TYPE_OFF: usize = 0;
+const IOV_ITER_UNION_OFF: usize = 16;
 const IOVEC_BASE_OFF: usize = 0;
 const IOVEC_LEN_OFF: usize = 8;
+
+// Linux iter_type discriminant values (include/linux/uio.h).
+const ITER_UBUF: u8 = 0;
+const ITER_IOVEC: u8 = 1;
 
 /// Bytes of payload we forward per event. Must be a power of two ≤
 /// [`TCP_DATA_CAP`] so the mask in `bpf_probe_read_user_buf` stays cheap.
@@ -185,27 +204,46 @@ pub struct TcpDataFrame {
 }
 
 fn read_first_iovec(msg: u64, dst: &mut [u8]) -> Result<u32, i64> {
-    // iov_iter base.
     let iov_iter = msg + MSGHDR_IOV_ITER_OFF as u64;
+    let iter_type: u8 =
+        unsafe { bpf_probe_read_kernel((iov_iter + IOV_ITER_TYPE_OFF as u64) as *const u8) }?;
 
-    // Union field in `iov_iter`: the iovec pointer, at offset 16.
-    let iov_ptr: u64 = unsafe {
-        bpf_probe_read_kernel((iov_iter + IOV_ITER_IOV_OFF as u64) as *const u64)
-    }?;
-    if iov_ptr == 0 {
-        return Ok(0);
-    }
-
-    let iov_base: u64 =
-        unsafe { bpf_probe_read_kernel((iov_ptr + IOVEC_BASE_OFF as u64) as *const u64) }?;
-    let iov_len: u64 =
-        unsafe { bpf_probe_read_kernel((iov_ptr + IOVEC_LEN_OFF as u64) as *const u64) }?;
+    let (iov_base, iov_len) = match iter_type {
+        ITER_UBUF => {
+            // Inline buffer. __ubuf_iovec lives at the union offset:
+            // { void *base; size_t len; } directly.
+            let base: u64 = unsafe {
+                bpf_probe_read_kernel((iov_iter + IOV_ITER_UNION_OFF as u64) as *const u64)
+            }?;
+            let len: u64 = unsafe {
+                bpf_probe_read_kernel(
+                    (iov_iter + IOV_ITER_UNION_OFF as u64 + IOVEC_LEN_OFF as u64) as *const u64,
+                )
+            }?;
+            (base, len)
+        }
+        ITER_IOVEC => {
+            // Pointer to a `struct iovec`.
+            let iov_ptr: u64 = unsafe {
+                bpf_probe_read_kernel((iov_iter + IOV_ITER_UNION_OFF as u64) as *const u64)
+            }?;
+            if iov_ptr == 0 {
+                return Ok(0);
+            }
+            let base: u64 =
+                unsafe { bpf_probe_read_kernel((iov_ptr + IOVEC_BASE_OFF as u64) as *const u64) }?;
+            let len: u64 =
+                unsafe { bpf_probe_read_kernel((iov_ptr + IOVEC_LEN_OFF as u64) as *const u64) }?;
+            (base, len)
+        }
+        // ITER_KVEC / ITER_BVEC / ITER_XARRAY — kernel-internal producers;
+        // we don't care for L7 plaintext capture.
+        _ => return Ok(0),
+    };
     if iov_base == 0 || iov_len == 0 {
         return Ok(0);
     }
 
-    // Clamp to CAP. We don't mask — a 4KiB cap is a power of two, so the
-    // verifier can bound-check via the `.min(CAP)`.
     let n = (iov_len as usize).min(CAP);
     if n == 0 {
         return Ok(0);
