@@ -28,6 +28,11 @@ sudo shannon trace -p 1234 --protocol postgres
 # top-like view, sorted by p99
 sudo shannon top --sort p99
 
+# service-map: who talks to whom, by protocol
+sudo shannon map
+sudo shannon map --format dot | dot -Tsvg > map.svg
+sudo shannon map --format json > edges.ndjson
+
 # pre-flight: is this box supported?
 shannon doctor
 
@@ -57,31 +62,107 @@ See [docs/architecture.md](docs/architecture.md) for how it works and
 
 ## What it decodes today
 
-| Protocol          | Status | Notes                                                       |
-|-------------------|--------|-------------------------------------------------------------|
-| HTTP/1.x          | ✅     | Request/response, headers, bodies                          |
-| HTTP/2            | ✅     | HPACK, per-stream framing                                  |
-| gRPC              | ✅     | On HTTP/2: method, status; full decode with `--proto`      |
-| WebSocket         | ✅     | RFC 6455 frames, follows HTTP/1.1 `Upgrade` handshake      |
-| Socket.IO / Engine.IO | ✅ | On WebSocket: event name, namespace, JSON args, ack IDs    |
-| Postgres          | ✅     | Startup, Simple / Extended query                           |
-| Redis             | ✅     | RESP2 + RESP3                                              |
-| MySQL             | ✅     | COM_QUERY, COM_STMT_PREPARE/EXECUTE                        |
-| DNS               | ✅     | Questions + answers (udp/53)                               |
-| Kafka wire        | ✅     | Produce, Fetch, Metadata, OffsetCommit; API versions 0–12  |
-| MongoDB wire      | ✅     | `OP_MSG`, BSON decode                                      |
-| TLS — OpenSSL     | ✅     | `SSL_{read,write,read_ex,write_ex}` uprobes on libssl      |
-| TLS — BoringSSL   | ✅     | Same symbols as libssl                                     |
-| TLS — GnuTLS      | ✅     | `gnutls_record_{send,recv}` uprobes                        |
-| TLS — NSS         | ✅     | `PR_Read` / `PR_Write` + `ssl3_SendPlainText` uprobes      |
-| TLS — Go          | ✅     | Symbol-scan `/proc/<pid>/exe`; `crypto/tls.(*Conn).{R,W}`  |
-| QUIC              | Partial| Packet type + SNI from Initial; encrypted payload deferred |
+**42 L7 protocols** span web, databases, messaging, mail, directory,
+telephony, remote-access, operational-technology, and AAA/auth.
+
+### Web + APIs
+
+| Protocol | Notes |
+|---|---|
+| HTTP/1.x | Requests, responses, headers, bodies, chunked + range reassembly |
+| HTTP/2 | HPACK, per-stream framing |
+| gRPC | On HTTP/2: service, method, status; body decode with `--proto` |
+| WebSocket | RFC 6455 frames; follows HTTP/1.1 `101 Upgrade` handshake |
+| Socket.IO / Engine.IO | Event name, namespace, JSON args, ack IDs |
+| TLS 1.0-1.3 | ClientHello / ServerHello SNI + ALPN + cipher-suite inspection |
+
+### Databases
+
+| Protocol | Notes |
+|---|---|
+| Postgres | Startup, Simple / Extended query, bind parameters |
+| MySQL | COM_QUERY, COM_STMT_PREPARE/EXECUTE |
+| MongoDB wire | `OP_MSG`, `OP_QUERY`, BSON decode |
+| Redis | RESP2 + RESP3 |
+| Cassandra CQL | Opcodes, frame headers, query strings |
+| Memcached | ASCII + binary protocols |
+| Oracle TNS | CONNECT descriptor, SERVICE_NAME / SID / PROGRAM / USER |
+| MS SQL Server TDS | PreLogin / Login7 (user / server / app / db), batch / RPC |
+
+### Messaging + streaming
+
+| Protocol | Notes |
+|---|---|
+| Kafka wire | Produce / Fetch / Metadata / OffsetCommit, API 0-12 |
+| AMQP 0.9.1 (RabbitMQ) | Full class/method table, basic.publish routing-key + exchange |
+| MQTT 3.1.1 / 5 | CONNECT / PUBLISH / SUBSCRIBE with topic + QoS |
+| NATS | Text protocol: PUB / SUB / MSG / HPUB / HMSG / INFO |
+| STUN / TURN | WebRTC signalling, XOR-MAPPED-ADDRESS decode, SOFTWARE |
+
+### Mail + directory
+
+| Protocol | Notes |
+|---|---|
+| IMAP | Tagged command framing, LOGIN redacted |
+| POP3 | USER + PASS (password redacted) |
+| SMTP | HELO / EHLO / AUTH (credentials redacted) + MAIL FROM / RCPT TO |
+| LDAP | BER: BindRequest (password redacted), SearchRequest with scopes |
+| Kerberos v5 | AS-REQ / AS-REP / TGS-REQ / ... with realm + cname + sname |
+
+### Remote access + proxy + telephony
+
+| Protocol | Notes |
+|---|---|
+| SSH | Banner + software identification |
+| RDP | X.224 ConnectionRequest, mstshash= username leak, TLS/CredSSP negotiation |
+| Telnet | IAC option negotiation + cleartext text extraction |
+| FTP | USER / PASS (redacted) / RETR / STOR / MLSD + reply codes |
+| SOCKS4 / SOCKS5 | CONNECT / BIND / UDP-ASSOCIATE with DOMAIN / IPv4 / IPv6 |
+| SIP | INVITE / REGISTER / ... with Call-ID + Via + From/To + User-Agent |
+
+### Operational-technology (ICS / SCADA / building automation)
+
+| Protocol | Notes |
+|---|---|
+| Modbus/TCP | Function codes on tcp/502 |
+| Siemens S7comm | TPKT + COTP + S7; ROSCTR + function-code decode |
+| EtherNet/IP + CIP | ODVA encapsulation (tcp/44818 + 2222); session + command decode |
+| DNP3 | IEEE 1815 link-layer framing (tcp/20000) |
+| IEC-104 | Telecontrol APDU: I / S / U frames + ASDU TypeID catalogue |
+| OPC-UA | IEC 62541-6 §7.1.2 binary framing (tcp/4840) |
+| BACnet/IP | BVLC + NPDU + APDU; readProperty / writeProperty / Who-Is / I-Am |
+
+### Infrastructure + auth
+
+| Protocol | Notes |
+|---|---|
+| DNS | Questions + answers over tcp/udp 53 |
+| DHCP | Op / transaction / chaddr MAC / options (Host Name, Vendor Class) |
+| TFTP | RRQ / WRQ / DATA / ACK / ERROR / OACK with options |
+| NTP | Full 48-byte header; stratum / mode / ref_id (GPS, PPS, LOCL) |
+| RADIUS | Access-Request / Accept / Reject; User-Name + Called/Calling-Station |
+| Syslog | RFC 3164 + RFC 5424 + RFC 6587 octet-counted framing |
+| SSDP | UDP discovery (mDNS-adjacent) |
+
+### TLS runtimes lifted for plaintext
+
+| Runtime | Hook |
+|---|---|
+| OpenSSL / libssl | `SSL_{read,write,read_ex,write_ex}` uprobes |
+| BoringSSL | Same symbols as libssl |
+| GnuTLS | `gnutls_record_{send,recv}` uprobes |
+| NSS | `PR_Read` / `PR_Write` + `ssl3_SendPlainText` uprobes |
+| Go `crypto/tls` | `/proc/<pid>/exe` symbol scan → `crypto/tls.(*Conn).{R,W}` |
+| QUIC (partial) | Packet type + SNI from Initial; encrypted payload deferred |
 
 Each connection carries a protocol state machine that can *upgrade itself*:
-HTTP/1.1 → WebSocket (on `101 Switching Protocols`) → Socket.IO (on event
-frames), and HTTP/2 → gRPC (on `application/grpc`). Nothing you configure.
+HTTP/1.1 → WebSocket → Socket.IO (on event frames), HTTP/2 → gRPC
+(on `application/grpc`), and any TCP → TLS (on a ClientHello record).
+Nothing you configure.
 
-Deferred to v0.2: Rust `rustls`, Java JSSE, QUIC payload decryption.
+Deferred to v0.2: Rust `rustls`, Java JSSE, QUIC payload decryption,
+UDP-path BPF kprobe (parsers for NTP / RADIUS / DHCP / BACnet / Kerberos-UDP
+/ Syslog-UDP / SSDP / TFTP / mDNS / STUN-over-UDP are already in place).
 
 ## Privacy
 
