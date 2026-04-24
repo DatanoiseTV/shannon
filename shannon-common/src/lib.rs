@@ -15,6 +15,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(clippy::missing_safety_doc)]
+// `pub _pad: ...` fields are intentional FFI struct padding for stable
+// layout shared with the BPF side. Workspace-wide allow-list covers the
+// rest; this one is specific to a `no_std` library that exposes raw
+// repr(C) types.
+#![allow(clippy::pub_underscore_fields)]
+#![allow(clippy::too_long_first_doc_paragraph)]
 
 /// ABI version. Bumped on any breaking layout change.
 pub const ABI_VERSION: u8 = 1;
