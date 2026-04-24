@@ -9,7 +9,7 @@ over TLS, without configuring any keys.
 
 It does this with eBPF: kernel probes on TCP, uprobes on `libssl` (and other TLS
 runtimes), and protocol parsers in userspace. No sidecars. No application changes.
-No private keys. No kernel modules. ~1% CPU on typical workloads.
+No private keys. No kernel modules.
 
 ## Status
 
@@ -25,8 +25,12 @@ sudo shannon
 # just postgres queries from pid 1234
 sudo shannon trace -p 1234 --protocol postgres
 
-# top-like view, sorted by p99
+# top-like view, sorted by p99 (also: rps, p50, bytes, errors)
 sudo shannon top --sort p99
+
+# scope by process name (glob) or by Kubernetes pod
+sudo shannon trace --comm 'nginx*'
+sudo shannon record --pod billing-7d8c -o billing.jsonl.zst
 
 # attach uprobes (libssl + libsqlite3) to a static binary. Covers Go apps
 # bundling their own TLS, custom Rust builds, appliance firmware in a
@@ -56,6 +60,18 @@ sudo shannon record -o capture.jsonl.zst --rotate 100M
 # play it back later (pipe to jq, feed the TUI, or summarise)
 sudo shannon trace --replay capture.jsonl.zst
 shannon analyze capture.jsonl.zst
+
+# build an API catalog from observed HTTP traffic and export OpenAPI 3.0
+sudo shannon trace --catalog catalog.jsonl --openapi spec.yaml
+
+# infer a .proto schema from raw protobuf messages a service is sending
+shannon proto-infer --samples /tmp/grpc-bodies -o inferred.proto
+
+# ask a local LLM (Ollama / LM Studio / vLLM) about an existing capture
+shannon ask --catalog catalog.jsonl "what processes talked to s3?"
+
+# shell completions
+shannon completions zsh > ~/.zfunc/_shannon
 ```
 
 ## Install
@@ -92,10 +108,11 @@ from each parser (DNS, HTTP, TLS, Redis, MQTT, CoAP, SQLite uprobes).
 
 ## What it decodes today
 
-**51 L7 protocols** span web, databases, messaging, mail, directory,
-telephony, SMS / carrier, media-streaming, remote-access,
-operational-technology, IoT / constrained devices, file-sharing, VPN,
-AAA / network-management, and legacy chat.
+**52 wire-format parsers** plus five overlay classifiers (gRPC,
+GraphQL, NTLM, LLM-API, Socket.IO) span web, databases, messaging,
+mail, directory, telephony, SMS / carrier, media-streaming,
+remote-access, operational-technology, IoT / constrained devices,
+file-sharing, VPN, AAA / network-management, and legacy chat.
 
 ### Web + APIs
 
