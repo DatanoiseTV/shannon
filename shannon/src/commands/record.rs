@@ -28,6 +28,7 @@ async fn run_async(args: RecordArgs) -> Result<()> {
     let filter = FilterSetup {
         pids: args.filter.pid.clone(),
         follow_children: args.filter.follow_children,
+        attach_bins: args.filter.attach_bin.clone(),
     };
     let mut runtime = Runtime::start_with(&filter)?;
 

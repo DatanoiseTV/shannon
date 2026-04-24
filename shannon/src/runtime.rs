@@ -49,6 +49,9 @@ pub struct FilterSetup {
     /// When true, attach the fork tracepoint so children of any filtered
     /// PID are auto-added at runtime.
     pub follow_children: bool,
+    /// Extra binary paths to attach libssl / libsqlite3 uprobes to.
+    /// Per-symbol best-effort — missing symbols silently skip.
+    pub attach_bins: Vec<std::path::PathBuf>,
 }
 
 impl Runtime {
@@ -124,6 +127,21 @@ impl Runtime {
             } else {
                 tracing::info!(path = %libsqlite.display(), "attached libsqlite3 uprobes");
             }
+        }
+
+        // Operator-supplied binaries (statically-linked libssl or
+        // libsqlite3 targets, Go apps bundling their own TLS, …).
+        // Best-effort per-symbol: binaries that only export one of
+        // the two sets still get partial coverage.
+        for bin in &filter.attach_bins {
+            let loaded_ssl = attach_libssl_best_effort(&mut bpf, bin);
+            let loaded_sqlite = attach_libsqlite3_best_effort(&mut bpf, bin);
+            tracing::info!(
+                path = %bin.display(),
+                ssl_syms = loaded_ssl,
+                sqlite_syms = loaded_sqlite,
+                "attached uprobes to user-specified binary",
+            );
         }
 
         // Spin up the ring-buffer reader.
@@ -282,6 +300,73 @@ fn attach_libsqlite3(bpf: &mut Ebpf, path: &std::path::Path) -> Result<()> {
         attach_uprobe(bpf, program, symbol, path, false)?;
     }
     Ok(())
+}
+
+/// Best-effort libssl uprobe attach: tries each symbol individually
+/// and skips silently when the symbol isn't exported by the target.
+/// Returns the count of symbols that attached. Use for operator-
+/// supplied `--attach-bin` paths where the binary may or may not
+/// contain the TLS library we probe.
+fn attach_libssl_best_effort(bpf: &mut Ebpf, path: &std::path::Path) -> usize {
+    let mut ok = 0usize;
+    for (program, symbol, _ret) in [
+        ("ssl_write", "SSL_write", false),
+        ("ssl_write_ex", "SSL_write_ex", false),
+        ("ssl_read", "SSL_read", false),
+        ("ssl_read_ret", "SSL_read", true),
+        ("ssl_read_ex", "SSL_read_ex", false),
+        ("ssl_read_ex_ret", "SSL_read_ex", true),
+    ] {
+        match attach_uprobe_quiet(bpf, program, symbol, path) {
+            Ok(()) => ok += 1,
+            Err(err) => tracing::debug!(
+                path = %path.display(), program, %err,
+                "uprobe attach miss — symbol probably not in binary",
+            ),
+        }
+    }
+    ok
+}
+
+/// Best-effort libsqlite3 uprobe attach; see [`attach_libssl_best_effort`].
+fn attach_libsqlite3_best_effort(bpf: &mut Ebpf, path: &std::path::Path) -> usize {
+    let mut ok = 0usize;
+    for (program, symbol) in [
+        ("sqlite_prepare_v2", "sqlite3_prepare_v2"),
+        ("sqlite_exec", "sqlite3_exec"),
+    ] {
+        match attach_uprobe_quiet(bpf, program, symbol, path) {
+            Ok(()) => ok += 1,
+            Err(err) => tracing::debug!(
+                path = %path.display(), program, %err,
+                "uprobe attach miss — symbol probably not in binary",
+            ),
+        }
+    }
+    ok
+}
+
+/// Like [`attach_uprobe`] but without the error-context wrapping so
+/// callers can treat "symbol absent" as a soft miss rather than an
+/// operator-facing failure.
+fn attach_uprobe_quiet(
+    bpf: &mut Ebpf,
+    program: &str,
+    function: &str,
+    target: &std::path::Path,
+) -> Result<()> {
+    let prog: &mut UProbe = bpf
+        .program_mut(program)
+        .context("program missing from BPF object")?
+        .try_into()
+        .context("program is not a UProbe")?;
+    // Loading a program is idempotent per-aya — but after a failed
+    // attach the program may already be in the loaded state. Swallow
+    // the "already loaded" case.
+    let _ = prog.load();
+    prog.attach(Some(function), 0, target, None)
+        .map(|_| ())
+        .map_err(anyhow::Error::from)
 }
 
 fn attach_uprobe(

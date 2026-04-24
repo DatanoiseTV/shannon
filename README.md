@@ -28,6 +28,11 @@ sudo shannon trace -p 1234 --protocol postgres
 # top-like view, sorted by p99
 sudo shannon top --sort p99
 
+# attach uprobes (libssl + libsqlite3) to a static binary. Covers Go apps
+# bundling their own TLS, custom Rust builds, appliance firmware in a
+# single ELF. Best-effort: missing symbols silently skip.
+sudo shannon trace --attach-bin /opt/my-app/bin/server
+
 # service-map: who talks to whom, by protocol
 sudo shannon map                                          # ANSI-redrawn table
 sudo shannon map --format tui                             # ratatui: scroll, sort, quit

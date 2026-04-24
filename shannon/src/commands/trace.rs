@@ -33,6 +33,7 @@ async fn run_async(args: TraceArgs) -> Result<()> {
     let filter = FilterSetup {
         pids: args.filter.pid.clone(),
         follow_children: args.filter.follow_children,
+        attach_bins: args.filter.attach_bin.clone(),
     };
     let mut runtime = Runtime::start_with(&filter)?;
     let mut out = std::io::stdout().lock();

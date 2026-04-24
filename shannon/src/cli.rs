@@ -138,6 +138,14 @@ pub struct FilterArgs {
     /// tracepoint that copies parents into children at fork time.
     #[arg(long = "follow-children", default_value_t = false)]
     pub follow_children: bool,
+
+    /// Additional binaries to attach libssl / libsqlite3 uprobes to.
+    /// Covers statically-linked SQLite or OpenSSL (Go apps bundling
+    /// their own TLS, custom Rust binaries, appliance firmware in a
+    /// single ELF). Symbol probes are best-effort: missing symbols
+    /// skip without aborting the attach. Repeatable.
+    #[arg(long = "attach-bin", value_name = "PATH", num_args = 1.., action = clap::ArgAction::Append)]
+    pub attach_bin: Vec<PathBuf>,
 }
 
 #[derive(Clone, Debug, ValueEnum, PartialEq, Eq, Hash)]
