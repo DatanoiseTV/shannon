@@ -52,6 +52,7 @@ use crate::parsers::{
     socks::{SocksParser, SocksParserOutput, SocksRecord},
     ssh::{SshParser, SshParserOutput, SshRecord},
     stun::{StunParser, StunParserOutput, StunRecord},
+    syslog::{SyslogParser, SyslogParserOutput, SyslogRecord},
     telnet::{TelnetParser, TelnetParserOutput, TelnetRecord},
     tls::{TlsParser, TlsParserOutput, TlsRecord},
     websocket::{WebSocketParser, WsParserOutput, WsRecord},
@@ -102,6 +103,7 @@ pub enum Protocol {
     Telnet,
     Ntp,
     Radius,
+    Syslog,
     Bypass,
 }
 
@@ -142,6 +144,7 @@ impl Protocol {
             Self::Telnet => "telnet",
             Self::Ntp => "ntp",
             Self::Radius => "radius",
+            Self::Syslog => "syslog",
             Self::Bypass => "-",
         }
     }
@@ -181,6 +184,7 @@ pub enum AnyRecord {
     Telnet(Box<TelnetRecord>),
     Ntp(Box<NtpRecord>),
     Radius(Box<RadiusRecord>),
+    Syslog(Box<SyslogRecord>),
 }
 
 impl AnyRecord {
@@ -219,6 +223,7 @@ impl AnyRecord {
             Self::Telnet(_) => "telnet",
             Self::Ntp(_) => "ntp",
             Self::Radius(_) => "radius",
+            Self::Syslog(_) => "syslog",
         }
     }
 
@@ -257,6 +262,7 @@ impl AnyRecord {
             Self::Telnet(r) => r.display_line(),
             Self::Ntp(r) => r.display_line(),
             Self::Radius(r) => r.display_line(),
+            Self::Syslog(r) => r.display_line(),
         }
     }
 }
@@ -350,6 +356,7 @@ struct ParserSlot {
     telnet: Option<TelnetParser>,
     ntp: Option<NtpParser>,
     radius: Option<RadiusParser>,
+    syslog: Option<SyslogParser>,
 }
 
 #[derive(Default)]
@@ -436,6 +443,7 @@ impl FlowTable {
             Protocol::Telnet => drive_telnet(state, dir),
             Protocol::Ntp => drive_ntp(state, dir),
             Protocol::Radius => drive_radius(state, dir),
+            Protocol::Syslog => drive_syslog(state, dir),
             Protocol::Unknown | Protocol::Bypass => Vec::new(),
         }
     }
@@ -478,6 +486,7 @@ fn detect(tx: &[u8], rx: &[u8], port: u16) -> Protocol {
         23 => return Protocol::Telnet,
         123 => return Protocol::Ntp,
         1812 | 1813 => return Protocol::Radius,
+        514 | 601 | 6514 => return Protocol::Syslog,
         _ => {}
     }
     for buf in [tx, rx] {
@@ -1339,6 +1348,29 @@ fn drive_radius(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
                 out.push(AnyRecord::Radius(Box::new(record)));
             }
             RadiusParserOutput::Skip(n) => {
+                if n == 0 { break; }
+                half.consume(n);
+            }
+        }
+    }
+    out
+}
+
+fn drive_syslog(state: &mut FlowState, dir: Direction) -> Vec<AnyRecord> {
+    let (half, slot) = match dir {
+        Direction::Tx => (&mut state.tx, &mut state.parser_tx.syslog),
+        Direction::Rx => (&mut state.rx, &mut state.parser_rx.syslog),
+    };
+    let parser = slot.get_or_insert_with(SyslogParser::default);
+    let mut out = Vec::new();
+    loop {
+        match parser.parse(&half.buf, dir) {
+            SyslogParserOutput::Need => break,
+            SyslogParserOutput::Record { record, consumed } => {
+                half.consume(consumed);
+                out.push(AnyRecord::Syslog(Box::new(record)));
+            }
+            SyslogParserOutput::Skip(n) => {
                 if n == 0 { break; }
                 half.consume(n);
             }

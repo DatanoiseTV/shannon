@@ -46,6 +46,7 @@ pub mod socks;
 pub mod ssdp;
 pub mod ssh;
 pub mod stun;
+pub mod syslog;
 pub mod telnet;
 pub mod tls;
 pub mod websocket;

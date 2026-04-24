@@ -149,6 +149,7 @@ fn classify(r: &AnyRecord) -> (&'static str, Option<String>) {
         AnyRecord::Telnet(_) => ("telnet", None),
         AnyRecord::Ntp(_) => ("ntp", None),
         AnyRecord::Radius(_) => ("radius", None),
+        AnyRecord::Syslog(_) => ("syslog", None),
     }
 }
 
