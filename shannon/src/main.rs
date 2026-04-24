@@ -75,6 +75,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Watch(args) => commands::watch::run(&cli, args),
         Command::Trace(args) => commands::trace::run(&cli, args),
         Command::Top(args) => commands::top::run(&cli, args),
+        Command::Map(args) => commands::map::run(&cli, args),
         Command::Record(args) => commands::record::run(&cli, args),
         Command::Analyze(args) => commands::analyze::run(&cli, args),
         Command::Ask(args) => commands::ask::run(&cli, args),

@@ -3,6 +3,7 @@
 
 pub mod analyze;
 pub mod ask;
+pub mod map;
 pub mod proto_infer;
 pub mod record;
 pub mod top;

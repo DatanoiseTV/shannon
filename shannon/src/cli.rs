@@ -64,6 +64,8 @@ pub enum Command {
     Trace(TraceArgs),
     /// Live aggregate summary (rps / p50 / p99 / errors).
     Top(TopArgs),
+    /// Service-map view — live graph of who talks to whom.
+    Map(MapArgs),
     /// Record events to disk for later analysis.
     Record(RecordArgs),
     /// Summarise a recording.
@@ -350,6 +352,33 @@ pub enum TopSort {
     P99,
     Bytes,
     Errors,
+}
+
+#[derive(Args, Clone, Debug, Default)]
+pub struct MapArgs {
+    /// Redraw interval.
+    #[arg(long, default_value = "2s", value_parser = parse_duration)]
+    pub interval: Duration,
+
+    /// Maximum rows in table mode.
+    #[arg(long, default_value_t = 40)]
+    pub depth: u32,
+
+    /// Output format.
+    #[arg(long, value_enum, default_value_t = MapFormat::Table)]
+    pub format: MapFormat,
+
+    #[command(flatten)]
+    pub filter: FilterArgs,
+}
+
+#[derive(Clone, Debug, ValueEnum, PartialEq, Eq, Default)]
+#[value(rename_all = "lower")]
+pub enum MapFormat {
+    #[default]
+    Table,
+    Json,
+    Dot,
 }
 
 #[derive(Clone, Debug, ValueEnum, PartialEq, Eq, Default)]
