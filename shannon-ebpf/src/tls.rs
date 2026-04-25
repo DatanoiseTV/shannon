@@ -159,6 +159,60 @@ pub fn ssl_read_ex_ret(ctx: RetProbeContext) -> u32 {
     finish_read(&ctx, /* via_ex = */ true)
 }
 
+// ---------------------------------------------------------------------------
+// GnuTLS: gnutls_record_{send,recv}(gnutls_session_t, void *data, size_t size)
+// Same shape as OpenSSL's _ex calls: data buffer is in arg1, size in arg2,
+// return value is the byte count (or negative on error). recv populates
+// the buffer on return — capture it on the retprobe.
+// ---------------------------------------------------------------------------
+
+#[uprobe]
+pub fn gnutls_send(ctx: ProbeContext) -> u32 {
+    let Some(session) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(buf) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
+    let Some(size) = ctx.arg::<u64>(2) else {
+        return 1;
+    };
+    if size == 0 {
+        return 0;
+    }
+    let n = (size as usize).min(CAP) as u32;
+    emit_tls_data(session, buf, n, size as u32, Direction::Tx, TlsLib::GnuTls);
+    0
+}
+
+#[uprobe]
+pub fn gnutls_recv(ctx: ProbeContext) -> u32 {
+    let Some(session) = ctx.arg::<u64>(0) else {
+        return 1;
+    };
+    let Some(buf) = ctx.arg::<u64>(1) else {
+        return 1;
+    };
+    let pt = bpf_get_current_pid_tgid();
+    let _ = PENDING_SSL.insert(
+        &pt,
+        &PendingRead {
+            ssl: session,
+            buf,
+            readbytes_out: 0,
+            lib: TlsLib::GnuTls as u8,
+            _pad: [0; 7],
+        },
+        0,
+    );
+    0
+}
+
+#[uretprobe]
+pub fn gnutls_recv_ret(ctx: RetProbeContext) -> u32 {
+    finish_read(&ctx, /* via_ex = */ false)
+}
+
 fn finish_read(ctx: &RetProbeContext, via_ex: bool) -> u32 {
     let pt = bpf_get_current_pid_tgid();
     let Some(pending) = (unsafe { PENDING_SSL.get(&pt) }).copied() else {

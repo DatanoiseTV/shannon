@@ -41,5 +41,8 @@ pub use conn::{inet_sock_set_state, tcp_v4_connect, tcp_v6_connect};
 pub use process::sched_process_fork;
 pub use sqlite::{sqlite_exec, sqlite_prepare_v2};
 pub use tcp::{tcp_recvmsg, tcp_recvmsg_ret, tcp_sendmsg};
-pub use tls::{ssl_read, ssl_read_ex, ssl_read_ex_ret, ssl_read_ret, ssl_write, ssl_write_ex};
+pub use tls::{
+    gnutls_recv, gnutls_recv_ret, gnutls_send, ssl_read, ssl_read_ex, ssl_read_ex_ret,
+    ssl_read_ret, ssl_write, ssl_write_ex,
+};
 pub use udp::{udp_recvmsg, udp_recvmsg_ret, udp_sendmsg};

@@ -235,14 +235,15 @@ file-sharing, VPN, AAA / network-management, and legacy chat.
 
 ### TLS runtimes lifted for plaintext
 
-| Runtime | Hook |
-|---|---|
-| OpenSSL / libssl | `SSL_{read,write,read_ex,write_ex}` uprobes |
-| BoringSSL | Same symbols as libssl |
-| GnuTLS | `gnutls_record_{send,recv}` uprobes |
-| NSS | `PR_Read` / `PR_Write` + `ssl3_SendPlainText` uprobes |
-| Go `crypto/tls` | `/proc/<pid>/exe` symbol scan → `crypto/tls.(*Conn).{R,W}` |
-| QUIC v1 | Client Initial decrypted with DCID-derived keys (RFC 9001); SNI + ALPN recovered. 1-RTT payload deferred |
+| Runtime | Hook | Status |
+|---|---|---|
+| OpenSSL / libssl | `SSL_{read,write,read_ex,write_ex}` uprobes | shipped |
+| BoringSSL | same symbols as libssl | shipped |
+| GnuTLS | `gnutls_record_{send,recv}` uprobes | shipped |
+| QUIC v1 | client Initial decrypted with DCID-derived keys (RFC 9001); SNI + ALPN recovered | shipped (1-RTT deferred) |
+| NSS | `PR_Read` / `PR_Write` + `ssl3_SendPlainText` uprobes | planned |
+| Go `crypto/tls` | per-binary symbol scan → `crypto/tls.(*Conn).{R,W}` | planned |
+| Rust `rustls` | per-binary symbol scan → `rustls::Connection` plaintext path | planned |
 
 Each connection carries a protocol state machine that can *upgrade itself*:
 HTTP/1.1 → WebSocket → Socket.IO (on event frames), HTTP/2 → gRPC
@@ -255,8 +256,8 @@ Both transports captured in both directions — **TCP** via
 + port read off `struct sock` with a `msg->msg_name` fallback for
 unconnected sockets).
 
-Deferred to v0.2: Rust `rustls`, Java JSSE, QUIC 1-RTT payload
-(needs the TLS master secret shannon never sees).
+Deferred to v0.2: NSS, Go `crypto/tls`, Rust `rustls`, Java JSSE,
+QUIC 1-RTT payload (needs the TLS master secret shannon never sees).
 
 ### Process identity
 

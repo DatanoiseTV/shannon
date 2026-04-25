@@ -130,6 +130,16 @@ impl Runtime {
             }
         }
 
+        // GnuTLS: same dynamic-library pattern. curl-gnutls, wget,
+        // and many GUI apps link against this rather than libssl.
+        for libgnutls in libgnutls_candidates() {
+            if let Err(err) = attach_libgnutls(&mut bpf, &libgnutls) {
+                tracing::warn!(path = %libgnutls.display(), %err, "skipping libgnutls uprobes");
+            } else {
+                tracing::info!(path = %libgnutls.display(), "attached libgnutls uprobes");
+            }
+        }
+
         // libsqlite3: same pattern — attach to dynamic library
         // installations. Statically-linked sqlite (Python, sqlite3 CLI,
         // app bundles) is a follow-up via per-binary symbol scan.
@@ -148,10 +158,12 @@ impl Runtime {
         // the two sets still get partial coverage.
         for bin in &filter.attach_bins {
             let loaded_ssl = attach_libssl_best_effort(&mut bpf, bin);
+            let loaded_gnutls = attach_libgnutls_best_effort(&mut bpf, bin);
             let loaded_sqlite = attach_libsqlite3_best_effort(&mut bpf, bin);
             tracing::info!(
                 path = %bin.display(),
                 ssl_syms = loaded_ssl,
+                gnutls_syms = loaded_gnutls,
                 sqlite_syms = loaded_sqlite,
                 "attached uprobes to user-specified binary",
             );
@@ -288,6 +300,62 @@ fn attach_libssl(bpf: &mut Ebpf, path: &std::path::Path) -> Result<()> {
         attach_uprobe(bpf, program, symbol, path, ret)?;
     }
     Ok(())
+}
+
+/// Common installed paths for libgnutls. The Debian/Ubuntu SONAME is
+/// `libgnutls.so.30`; older RHEL/Fedora carries the same.
+fn libgnutls_candidates() -> Vec<std::path::PathBuf> {
+    use std::collections::BTreeSet;
+    use std::path::PathBuf;
+    let mut seen: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut out = Vec::new();
+    for raw in [
+        "/lib/x86_64-linux-gnu/libgnutls.so.30",
+        "/usr/lib/x86_64-linux-gnu/libgnutls.so.30",
+        "/usr/lib64/libgnutls.so.30",
+        "/lib64/libgnutls.so.30",
+    ] {
+        let p = PathBuf::from(raw);
+        let Ok(canon) = p.canonicalize() else {
+            continue;
+        };
+        if seen.insert(canon.clone()) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+fn attach_libgnutls(bpf: &mut Ebpf, path: &std::path::Path) -> Result<()> {
+    for (program, symbol, ret) in [
+        ("gnutls_send", "gnutls_record_send", false),
+        ("gnutls_recv", "gnutls_record_recv", false),
+        ("gnutls_recv_ret", "gnutls_record_recv", true),
+    ] {
+        attach_uprobe(bpf, program, symbol, path, ret)?;
+    }
+    Ok(())
+}
+
+/// Best-effort libgnutls attach for operator-supplied binaries; mirrors
+/// `attach_libssl_best_effort` so a `--attach-bin` target that statically
+/// links GnuTLS still gets coverage.
+fn attach_libgnutls_best_effort(bpf: &mut Ebpf, path: &std::path::Path) -> usize {
+    let mut ok = 0usize;
+    for (program, symbol, _ret) in [
+        ("gnutls_send", "gnutls_record_send", false),
+        ("gnutls_recv", "gnutls_record_recv", false),
+        ("gnutls_recv_ret", "gnutls_record_recv", true),
+    ] {
+        match attach_uprobe_quiet(bpf, program, symbol, path) {
+            Ok(()) => ok += 1,
+            Err(err) => tracing::debug!(
+                path = %path.display(), program, %err,
+                "uprobe attach miss — symbol probably not in binary",
+            ),
+        }
+    }
+    ok
 }
 
 /// Common installed paths for libsqlite3. Same dedup-by-canonical
