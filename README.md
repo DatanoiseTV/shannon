@@ -76,16 +76,17 @@ shannon completions zsh > ~/.zfunc/_shannon
 
 ## Install
 
-### From a release `.deb` (Debian / Ubuntu, x86_64)
+### From a release `.deb` (Debian / Ubuntu, x86_64 + aarch64)
 
-Each tagged release ships a `.deb` and a SHA-256 sum:
+Each tagged release ships per-arch `.deb`s and SHA-256 sums:
 
 ```bash
 ver=0.1.0
-curl -LO https://github.com/DatanoiseTV/shannon/releases/download/v${ver}/shannon_${ver}-1_amd64.deb
-sudo dpkg -i shannon_${ver}-1_amd64.deb
-sudo shannon doctor               # confirm BTF + kprobe targets
-sudo systemctl enable --now shannon   # optional: continuous background recorder
+arch=$(dpkg --print-architecture)         # amd64 or arm64
+curl -LO https://github.com/DatanoiseTV/shannon/releases/download/v${ver}/shannon_${ver}-1_${arch}.deb
+sudo dpkg -i shannon_${ver}-1_${arch}.deb
+sudo shannon doctor                       # confirm BTF + kprobe targets
+sudo systemctl enable --now shannon       # optional: continuous background recorder
 ```
 
 The package installs `/usr/bin/shannon`, a hardened systemd unit at

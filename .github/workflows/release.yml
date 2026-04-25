@@ -1,11 +1,11 @@
 name: release
 
-# Triggered on a semver tag push (e.g. `v0.1.0`). Produces:
-#   * shannon_<ver>-1_amd64.deb         — Debian package for Ubuntu 22.04+/Debian 12+
-#   * shannon-<ver>-x86_64-unknown-linux-gnu.tar.gz  — bare binary tarball
+# Triggered on a semver tag push (e.g. `v0.1.0`). Produces, per arch:
+#   * shannon_<ver>-1_<deb-arch>.deb               — Debian package
+#   * shannon-<ver>-<rust-triple>.tar.gz           — bare binary tarball
 #
-# Both attached to a GitHub release. Linux x86_64 only — eBPF + BTF
-# constrain the support matrix; arm64 hasn't been validated.
+# Architectures: x86_64 (ubuntu-24.04) and aarch64 (ubuntu-24.04-arm,
+# native runner). Both gated on Linux ≥ 5.8 with BTF.
 
 on:
   push:
@@ -19,12 +19,14 @@ permissions:
 
 jobs:
   build:
-    name: build x86_64-linux release
-    runs-on: ubuntu-24.04
-    outputs:
-      version: ${{ steps.meta.outputs.version }}
-      tarball: ${{ steps.pack.outputs.tarball }}
-      deb:     ${{ steps.deb.outputs.deb }}
+    name: build ${{ matrix.target.triple }}
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { runner: ubuntu-24.04,     triple: x86_64-unknown-linux-gnu,  deb_arch: amd64 }
+          - { runner: ubuntu-24.04-arm, triple: aarch64-unknown-linux-gnu, deb_arch: arm64 }
     steps:
       - uses: actions/checkout@v4
 
@@ -38,7 +40,7 @@ jobs:
             ver="${ver}-dev$(date -u +%Y%m%d%H%M)"
           fi
           echo "version=$ver" >>"$GITHUB_OUTPUT"
-          echo "Building shannon $ver"
+          echo "Building shannon $ver for ${{ matrix.target.triple }}"
 
       - name: Install toolchains (stable + nightly)
         run: |
@@ -59,6 +61,8 @@ jobs:
           cargo install cargo-deb --locked
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target.triple }}
 
       - name: Build release
         run: cargo build --release --workspace -p shannon
@@ -70,23 +74,21 @@ jobs:
         id: pack
         run: |
           ver="${{ steps.meta.outputs.version }}"
-          stage="shannon-${ver}-x86_64-unknown-linux-gnu"
+          stage="shannon-${ver}-${{ matrix.target.triple }}"
           mkdir -p "dist/$stage"
           cp target/release/shannon "dist/$stage/"
           cp README.md DEMO.md SECURITY.md LICENSE-APACHE LICENSE-MIT "dist/$stage/" 2>/dev/null || true
           tar -C dist -czf "dist/${stage}.tar.gz" "$stage"
           (cd dist && sha256sum "${stage}.tar.gz" >"${stage}.tar.gz.sha256")
-          echo "tarball=dist/${stage}.tar.gz" >>"$GITHUB_OUTPUT"
           ls -la dist/
 
       - name: Build .deb
-        id: deb
         run: |
+          # cargo-deb derives the deb arch from the host; on the native
+          # arm64 runner it picks arm64, on x86_64 it picks amd64.
           cargo deb -p shannon --no-build
           cp target/debian/*.deb dist/
           (cd dist && for f in *.deb; do sha256sum "$f" >"${f}.sha256"; done)
-          deb=$(ls dist/*.deb | head -n1)
-          echo "deb=$deb" >>"$GITHUB_OUTPUT"
           ls -la dist/
 
       - name: Smoke-check the binary
@@ -96,7 +98,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: shannon-linux-x86_64
+          name: shannon-${{ matrix.target.triple }}
           path: dist/
 
   release:
@@ -108,13 +110,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: shannon-linux-x86_64
-          path: dist/
+          # Pull every per-arch artifact into dist/
+          path: dist-by-arch
+      - name: Flatten artefacts
+        run: |
+          mkdir -p dist
+          find dist-by-arch -type f \( -name '*.deb' -o -name '*.tar.gz' -o -name '*.sha256' \) \
+            -exec cp {} dist/ \;
+          ls -la dist/
 
       - name: Generate release notes
-        id: notes
         run: |
           tag="${GITHUB_REF_NAME}"
+          ver="${tag#v}"
           prev=$(git tag --sort=-v:refname | grep -v "^${tag}$" | head -n1 || true)
           {
             echo "## shannon ${tag}"
@@ -126,18 +134,24 @@ jobs:
               echo "First tagged release."
             fi
             echo
-            echo "### Install"
+            echo "### Install (Debian / Ubuntu)"
             echo
             echo '```bash'
-            echo "curl -LO https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/shannon_${tag#v}-1_amd64.deb"
-            echo "sudo dpkg -i shannon_${tag#v}-1_amd64.deb"
+            echo "# x86_64 (Intel / AMD)"
+            echo "curl -LO https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/shannon_${ver}-1_amd64.deb"
+            echo "sudo dpkg -i shannon_${ver}-1_amd64.deb"
+            echo
+            echo "# aarch64 (Graviton / Ampere / RPi 4+)"
+            echo "curl -LO https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/shannon_${ver}-1_arm64.deb"
+            echo "sudo dpkg -i shannon_${ver}-1_arm64.deb"
+            echo
             echo "sudo systemctl enable --now shannon   # optional: continuous recorder"
             echo '```'
             echo
             echo "### Verify"
             echo
             echo '```bash'
-            echo "sha256sum -c shannon_${tag#v}-1_amd64.deb.sha256"
+            echo "sha256sum -c shannon_${ver}-1_<arch>.deb.sha256"
             echo '```'
           } >notes.md
           cat notes.md
