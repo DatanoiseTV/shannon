@@ -105,6 +105,14 @@ jobs:
           image-version: ${{ matrix.kernel }}
           host-mount: ./stage
           install-dependencies: 'true'
+          # Action builds the qcow2 path as
+          # `${images-folder-parent}/images/${arch}/images/${name}.qcow2`.
+          # An empty parent (the documented "optional" default) renders an
+          # absolute /images/... path that doesn't exist and isn't a valid
+          # registry ref either — pulling fails. Cilium's own workflows
+          # set this to /tmp.
+          images-folder-parent: '/tmp'
+          lvh-version: 'v0.0.29'
           cmd: |
             cd /host
             ./smoke.sh
