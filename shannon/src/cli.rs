@@ -4,7 +4,7 @@
 //! contract is legible in one file. Commands defer all behaviour to
 //! [`crate::commands`] modules.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -78,6 +78,8 @@ pub enum Command {
     Doctor,
     /// Generate shell completions.
     Completions(CompletionsArgs),
+    /// Generate `man` pages — one .1 per subcommand — into the given directory.
+    Manpages(ManpagesArgs),
     /// Print version and build info.
     Version,
 }
@@ -543,6 +545,14 @@ pub struct CompletionsArgs {
     pub shell: Shell,
 }
 
+#[derive(Args, Clone, Debug)]
+pub struct ManpagesArgs {
+    /// Output directory. Created if missing. One `shannon-<sub>.1` file
+    /// per subcommand plus the top-level `shannon.1`.
+    #[arg(value_name = "OUT_DIR")]
+    pub out_dir: PathBuf,
+}
+
 // ---------------------------------------------------------------------------
 // Parsers
 // ---------------------------------------------------------------------------
@@ -581,6 +591,47 @@ pub fn print_completions(shell: Shell) -> anyhow::Result<()> {
     let mut cmd = Cli::command();
     let bin_name = cmd.get_name().to_string();
     clap_complete::generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
+    Ok(())
+}
+
+/// Walk the clap command tree and write one roff manpage per subcommand
+/// into `out_dir`. The top-level binary becomes `shannon.1`; each
+/// subcommand becomes `shannon-<sub>.1`. Writes are stable so the
+/// output is committable / diffable.
+pub fn generate_manpages(out_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    use anyhow::Context;
+    use clap::CommandFactory;
+    std::fs::create_dir_all(out_dir)
+        .with_context(|| format!("creating {}", out_dir.display()))?;
+    let cmd = Cli::command();
+    let mut written = Vec::new();
+    write_one(&cmd, "shannon", out_dir, &mut written)?;
+    for sub in cmd.get_subcommands() {
+        let leaf = sub.get_name().to_string();
+        let stem = format!("shannon-{leaf}");
+        // The subcommand is rendered as a top-level command for the
+        // purpose of the manpage so flags / args show up properly.
+        let owned = sub.clone().name(stem.clone()).bin_name(stem.clone());
+        write_one(&owned, &stem, out_dir, &mut written)?;
+    }
+    written.sort();
+    Ok(written)
+}
+
+fn write_one(
+    cmd: &clap::Command,
+    stem: &str,
+    out_dir: &Path,
+    written: &mut Vec<PathBuf>,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+    let path = out_dir.join(format!("{stem}.1"));
+    let mut buf: Vec<u8> = Vec::new();
+    clap_mangen::Man::new(cmd.clone())
+        .render(&mut buf)
+        .with_context(|| format!("rendering manpage for {stem}"))?;
+    std::fs::write(&path, &buf).with_context(|| format!("writing {}", path.display()))?;
+    written.push(path);
     Ok(())
 }
 

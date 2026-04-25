@@ -38,6 +38,8 @@ enum Cmd {
     Run(RunArgs),
     /// Remove build artefacts.
     Clean,
+    /// Build shannon (release), then emit manpages into `target/manpages/`.
+    Manpages,
 }
 
 #[derive(clap::Args)]
@@ -86,7 +88,32 @@ fn main() -> Result<()> {
         Cmd::Fmt { check } => cmd_fmt(check),
         Cmd::Run(args) => cmd_run(&args),
         Cmd::Clean => cmd_clean(),
+        Cmd::Manpages => cmd_manpages(),
     }
+}
+
+fn cmd_manpages() -> Result<()> {
+    let root = workspace_root()?;
+    // Build a release shannon so the binary that knows the current CLI
+    // shape produces the manpages. Cheaper than re-implementing the
+    // walk in xtask.
+    let status = Command::new(cargo_cmd())
+        .current_dir(&root)
+        .args(["build", "--release", "-p", "shannon"])
+        .status()
+        .context("cargo build -p shannon")?;
+    check_status("cargo build", status)?;
+
+    let bin = root.join("target/release/shannon");
+    let out = root.join("target/manpages");
+    let status = Command::new(&bin)
+        .arg("manpages")
+        .arg(&out)
+        .status()
+        .with_context(|| format!("running {}", bin.display()))?;
+    check_status("shannon manpages", status)?;
+    println!("manpages written to {}", out.display());
+    Ok(())
 }
 
 fn workspace_root() -> Result<PathBuf> {

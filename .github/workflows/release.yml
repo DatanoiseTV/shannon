@@ -63,6 +63,9 @@ jobs:
       - name: Build release
         run: cargo build --release --workspace -p shannon
 
+      - name: Generate manpages
+        run: cargo xtask manpages
+
       - name: Pack tarball
         id: pack
         run: |

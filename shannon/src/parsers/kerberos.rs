@@ -226,7 +226,10 @@ fn find_principal_string(buf: &[u8], ctx_tag: u8) -> Option<String> {
     while i + 2 < buf.len() {
         if buf[i] == ctx_tag {
             let (content, content_end) = ber_len(buf, i + 1)?;
-            let inner = &buf[content..content + content_end];
+            // BER length can claim more bytes than `buf` actually has.
+            // Untrusted-byte safety: clamp to the available tail.
+            let end = content.checked_add(content_end)?.min(buf.len());
+            let inner = &buf[content.min(end)..end];
             if let Some(s) = find_first_kerberos_string(inner, 1) {
                 return Some(s);
             }
@@ -245,7 +248,10 @@ fn find_principal_string_after(buf: &[u8], ctx_tag: u8) -> Option<String> {
     while i + 2 < buf.len() {
         if buf[i] == ctx_tag {
             let (content, len) = ber_len(buf, i + 1)?;
-            let inner = &buf[content..content + len];
+            // BER length isn't guaranteed to fit; clamp like its sibling
+            // helper above.
+            let end = content.checked_add(len)?.min(buf.len());
+            let inner = &buf[content.min(end)..end];
             // Walk past first 0x1B GeneralString, then find next one.
             let mut j = 0;
             let mut seen = false;

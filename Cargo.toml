@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members  = ["shannon", "shannon-common", "xtask"]
-exclude  = ["shannon-ebpf"]
+exclude  = ["shannon-ebpf", "fuzz"]
 
 [workspace.package]
 version      = "0.1.0"

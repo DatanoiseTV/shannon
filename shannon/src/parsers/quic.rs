@@ -208,6 +208,13 @@ impl QuicParser {
         // Decrypt payload.
         let payload_off = pn_offset + pn_len;
         let payload_end = total;
+        // Malformed: the packet-length varint encoded fewer bytes than
+        // the unmasked packet number occupies. Bypass instead of slicing
+        // negative-length range.
+        if payload_off > payload_end {
+            self.bypass = true;
+            return QuicParserOutput::Skip(total);
+        }
         let ciphertext = &buf[payload_off..payload_end];
         let mut work = ciphertext.to_vec();
         let plaintext = match aead_decrypt(&client_key, &nonce, &header, &mut work) {

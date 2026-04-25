@@ -1,0 +1,72 @@
+[package]
+name      = "shannon-fuzz"
+version   = "0.0.0"
+edition   = "2021"
+publish   = false
+
+# Excluded from the main workspace: cargo-fuzz uses its own toolchain
+# (nightly) and target. Keeping it standalone means a stable workspace
+# build doesn't have to pull in libfuzzer-sys.
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+shannon       = { path = "../shannon" }
+
+# Fuzz binaries — one per parser. `cargo fuzz run <name>`.
+[[bin]]
+name              = "dns"
+path              = "fuzz_targets/dns.rs"
+test              = false
+doc               = false
+bench             = false
+
+[[bin]]
+name              = "tls"
+path              = "fuzz_targets/tls.rs"
+test              = false
+doc               = false
+bench             = false
+
+[[bin]]
+name              = "http2"
+path              = "fuzz_targets/http2.rs"
+test              = false
+doc               = false
+bench             = false
+
+[[bin]]
+name              = "quic"
+path              = "fuzz_targets/quic.rs"
+test              = false
+doc               = false
+bench             = false
+
+[[bin]]
+name              = "kerberos"
+path              = "fuzz_targets/kerberos.rs"
+test              = false
+doc               = false
+bench             = false
+
+[[bin]]
+name              = "ldap"
+path              = "fuzz_targets/ldap.rs"
+test              = false
+doc               = false
+bench             = false
+
+[[bin]]
+name              = "coap"
+path              = "fuzz_targets/coap.rs"
+test              = false
+doc               = false
+bench             = false
+
+[[bin]]
+name              = "snmp"
+path              = "fuzz_targets/snmp.rs"
+test              = false
+doc               = false
+bench             = false

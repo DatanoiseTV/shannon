@@ -387,7 +387,12 @@ fn decode_op(app_tag: u8, body: &[u8], _dir: Direction) -> Option<LdapOp> {
                 let (_, len_bytes) = ber_length(&body[1..])?;
                 let (oid_len, _) = ber_length(&body[1..])?;
                 let start = 1 + len_bytes;
-                let oid = String::from_utf8_lossy(&body[start..start + oid_len]).into_owned();
+                // Untrusted BER length can outrun the buffer; clamp.
+                let end = start.checked_add(oid_len)?.min(body.len());
+                if start > end {
+                    return None;
+                }
+                let oid = String::from_utf8_lossy(&body[start..end]).into_owned();
                 Some(LdapOp::ExtendedRequest { oid })
             } else {
                 Some(LdapOp::ExtendedRequest { oid: String::new() })

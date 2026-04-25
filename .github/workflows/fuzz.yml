@@ -1,0 +1,77 @@
+name: fuzz
+
+# Smoke-fuzz every parser for a short window per PR / push. Catches
+# panics, OOB reads, and accidental infinite loops introduced by new
+# parser changes. NOT a deep fuzz — production-grade campaigns belong
+# in OSS-Fuzz / a longer-running scheduled job.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'shannon/src/parsers/**'
+      - 'fuzz/**'
+      - '.github/workflows/fuzz.yml'
+  pull_request:
+    paths:
+      - 'shannon/src/parsers/**'
+      - 'fuzz/**'
+      - '.github/workflows/fuzz.yml'
+  workflow_dispatch:
+  schedule:
+    # Nightly long-ish run — 5 min per target — catches things the
+    # 30 s per-PR smoke misses.
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [dns, tls, http2, quic, kerberos, ldap, coap, snmp]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly + cargo-fuzz
+        run: |
+          rustup toolchain install nightly --component rust-src
+          cargo install cargo-fuzz --locked
+
+      - name: System deps
+        run: sudo apt-get update && sudo apt-get install -y libelf-dev pkg-config
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            fuzz
+
+      - name: Compute fuzz time
+        id: time
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "secs=300" >>"$GITHUB_OUTPUT"   # 5 min nightly
+          else
+            echo "secs=30"  >>"$GITHUB_OUTPUT"   # 30 s per PR
+          fi
+
+      - name: Run fuzz target
+        working-directory: fuzz
+        run: |
+          cargo +nightly fuzz run ${{ matrix.target }} -- \
+            -max_total_time=${{ steps.time.outputs.secs }} \
+            -print_final_stats=1
+
+      - name: Upload crash artefacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-${{ matrix.target }}-crash
+          path: fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 14

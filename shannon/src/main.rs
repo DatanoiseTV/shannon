@@ -90,6 +90,13 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::ProtoInfer(args) => commands::proto_infer::run(&cli, args),
         Command::Doctor => doctor::run(&cli),
         Command::Completions(args) => cli::print_completions(args.shell),
+        Command::Manpages(args) => {
+            let written = cli::generate_manpages(&args.out_dir)?;
+            for p in &written {
+                println!("{}", p.display());
+            }
+            Ok(())
+        }
         Command::Version => {
             println!("shannon {}", env!("CARGO_PKG_VERSION"));
             println!(
