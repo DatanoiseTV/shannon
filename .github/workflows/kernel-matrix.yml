@@ -98,7 +98,7 @@ jobs:
         run: chmod +x stage/shannon stage/smoke.sh
 
       - name: Boot kernel ${{ matrix.kernel }} and run smoke
-        uses: cilium/little-vm-helper@908ab1ff8a596a03cd5221a1f8602dc44fbcaeec  # v0.0.26
+        uses: cilium/little-vm-helper@49df3ac9f95b6e8eeb91dca0ca5444ceefe9bd7b  # v0.0.29
         with:
           test-name: shannon-smoke-${{ matrix.kernel }}
           image: 'kind'
