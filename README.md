@@ -94,6 +94,30 @@ The package installs `/usr/bin/shannon`, a hardened systemd unit at
 in if you want a recorder service), `/etc/default/shannon` for tunables,
 and the docs under `/usr/share/doc/shannon/`.
 
+### Kubernetes (DaemonSet)
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/DatanoiseTV/shannon/main/deploy/k8s/daemonset.yaml
+```
+
+Creates a `shannon` namespace, runs one recorder per node with
+`hostPID + hostNetwork`, writes rotating captures under each node's
+`/var/log/shannon/`, and exposes `:9750/metrics` for Prometheus.
+See [`deploy/k8s/README.md`](deploy/k8s/README.md) for hardened
+config (drop `privileged`, explicit caps) and a `PodMonitor`.
+
+### Container image
+
+```bash
+docker run --rm --privileged --pid=host --network=host \
+  -v /sys/fs/bpf:/sys/fs/bpf \
+  -v /sys/kernel/btf:/sys/kernel/btf:ro \
+  ghcr.io/datanoisetv/shannon:latest doctor
+```
+
+Multi-arch (amd64 + arm64), tagged on every release plus `:latest`
+on stable tags and `:main` on every push to main.
+
 ### From source
 
 ```bash

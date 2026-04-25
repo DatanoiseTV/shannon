@@ -1,0 +1,164 @@
+# Shannon DaemonSet — runs one recorder per node.
+#
+# Loads eBPF programs into the host kernel, attaches kprobes/uprobes,
+# and writes a rotating capture file under the node's /var/log/shannon
+# (hostPath mount). Streams Prometheus metrics on :9750 of the pod IP.
+#
+# Apply with:
+#   kubectl apply -f https://raw.githubusercontent.com/DatanoiseTV/shannon/main/deploy/k8s/daemonset.yaml
+#
+# Requires: kernel ≥ 5.8 with BTF on every node, container runtime
+# that allows CAP_BPF / CAP_PERFMON. Tested on containerd + cri-o.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shannon
+  labels:
+    app.kubernetes.io/name: shannon
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shannon
+  namespace: shannon
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: shannon
+  namespace: shannon
+  labels:
+    app.kubernetes.io/name: shannon
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shannon
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: shannon
+      annotations:
+        # Make Prometheus auto-discover the /metrics endpoint when the
+        # cluster's Prometheus is configured for pod-annotation-based
+        # scrape. Operators using the Prom Operator should swap this
+        # for a PodMonitor (see deploy/k8s/podmonitor.yaml).
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9750'
+        prometheus.io/path: '/metrics'
+    spec:
+      serviceAccountName: shannon
+      hostPID: true                    # /proc/<pid>/maps + cgroup walk
+      hostNetwork: true                # see real socket addrs, not the pod's
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        - operator: Exists             # run on every node, taints and all
+      nodeSelector:
+        kubernetes.io/os: linux
+
+      # Wait briefly on shutdown so an in-flight ringbuffer drain finishes
+      # before the kernel detaches our BPF programs.
+      terminationGracePeriodSeconds: 30
+      priorityClassName: system-node-critical
+
+      containers:
+        - name: shannon
+          image: ghcr.io/datanoisetv/shannon:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --metrics-listen=0.0.0.0:9750
+            - record
+            - --output=/var/log/shannon/capture.jsonl.zst
+            - --rotate=200M
+            - --max-size=10G
+          ports:
+            - name: metrics
+              containerPort: 9750
+              protocol: TCP
+          # eBPF needs to load programs and read kallsyms. Privileged is
+          # the simplest portable option; production-hardened operators
+          # can swap for the explicit capability list under the comment.
+          securityContext:
+            privileged: true
+            # Hardened alternative (kernel ≥ 5.8 with bpf-ns split):
+            # privileged: false
+            # capabilities:
+            #   drop: [ALL]
+            #   add:
+            #     - BPF              # bpf() syscall
+            #     - PERFMON          # perf_event_open for kprobes/uprobes
+            #     - NET_ADMIN        # required by some kprobes on net stack
+            #     - DAC_READ_SEARCH  # /proc/<pid>/maps for foreign PIDs
+            #     - SYS_RESOURCE     # RLIMIT_MEMLOCK on pre-5.11 kernels
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1
+              memory: 512Mi
+          volumeMounts:
+            - name: capture
+              mountPath: /var/log/shannon
+            - name: bpf-fs
+              mountPath: /sys/fs/bpf
+              mountPropagation: Bidirectional
+            - name: kernel-debug
+              mountPath: /sys/kernel/debug
+              readOnly: true
+            - name: kernel-btf
+              mountPath: /sys/kernel/btf
+              readOnly: true
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+              readOnly: true
+          # Memlock has to be unbounded — verifier rejects loading
+          # anything substantial otherwise.
+          # No probe — `shannon doctor` exits non-zero on warnings even
+          # when everything's actually fine, which would crash-loop the
+          # pod. Liveness via metrics endpoint instead.
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+      volumes:
+        - name: capture
+          hostPath:
+            path: /var/log/shannon
+            type: DirectoryOrCreate
+        - name: bpf-fs
+          hostPath:
+            path: /sys/fs/bpf
+            type: DirectoryOrCreate
+        - name: kernel-debug
+          hostPath:
+            path: /sys/kernel/debug
+        - name: kernel-btf
+          hostPath:
+            path: /sys/kernel/btf
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
