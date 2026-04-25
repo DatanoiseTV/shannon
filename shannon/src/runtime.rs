@@ -336,7 +336,11 @@ fn libssl_candidates() -> Vec<std::path::PathBuf> {
 /// reading `/proc/<pid>/maps` (process exiting, permission denied for
 /// non-root readers of foreign PIDs) are silently skipped.
 #[allow(clippy::type_complexity)]
-fn discover_loaded_libs() -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
+fn discover_loaded_libs() -> (
+    Vec<std::path::PathBuf>,
+    Vec<std::path::PathBuf>,
+    Vec<std::path::PathBuf>,
+) {
     use std::collections::BTreeSet;
     use std::path::PathBuf;
     let mut ssl: BTreeSet<PathBuf> = BTreeSet::new();

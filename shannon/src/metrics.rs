@@ -41,8 +41,7 @@ impl StatsReader {
         let map = bpf
             .take_map("STATS")
             .context("STATS map missing from BPF object")?;
-        let inner = PerCpuArray::<_, u64>::try_from(map)
-            .context("STATS map type mismatch")?;
+        let inner = PerCpuArray::<_, u64>::try_from(map).context("STATS map type mismatch")?;
         Ok(Self { inner })
     }
 
@@ -85,8 +84,8 @@ impl StatsSnapshot {
 /// no auth. Bind to `127.0.0.1:9750` by default; expose externally via
 /// reverse proxy if you need that.
 pub fn serve(reader: Arc<Mutex<StatsReader>>, addr: SocketAddr) -> Result<()> {
-    let listener = TcpListener::bind(addr)
-        .with_context(|| format!("binding metrics listener to {addr}"))?;
+    let listener =
+        TcpListener::bind(addr).with_context(|| format!("binding metrics listener to {addr}"))?;
     listener
         .set_nonblocking(false)
         .context("setting metrics listener blocking")?;
@@ -115,19 +114,13 @@ fn handle(mut stream: TcpStream, reader: &Mutex<StatsReader>) -> Result<()> {
     let mut buf = [0u8; 1024];
     let n = stream.read(&mut buf).context("reading request")?;
     let req = std::str::from_utf8(&buf[..n]).unwrap_or("");
-    let path = req
-        .split_whitespace()
-        .nth(1)
-        .unwrap_or("/")
-        .to_string();
+    let path = req.split_whitespace().nth(1).unwrap_or("/").to_string();
 
     let body = if path == "/metrics" {
         let snap = reader.lock().snapshot()?;
         snap.render()
     } else if path == "/" {
-        String::from(
-            "shannon metrics exporter\n\nendpoints:\n  /metrics  Prometheus text format\n",
-        )
+        String::from("shannon metrics exporter\n\nendpoints:\n  /metrics  Prometheus text format\n")
     } else {
         return write_status(&mut stream, 404, "not found", "");
     };

@@ -27,7 +27,10 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}   # datanoisetv/shannon
+  # Container registries reject uppercase; ${{ github.repository }}
+  # passes 'DatanoiseTV/shannon' verbatim, so hardcode the lowercase
+  # form rather than thread a tolower through every step.
+  IMAGE_NAME: datanoisetv/shannon
 
 jobs:
   build:
