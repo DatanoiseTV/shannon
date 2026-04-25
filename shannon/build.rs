@@ -34,8 +34,7 @@ fn main() {
     // the lib-only use case.
     if std::env::var_os("SHANNON_SKIP_BPF").is_some() {
         let dst = out_dir.join("shannon-ebpf");
-        std::fs::write(&dst, b"")
-            .unwrap_or_else(|e| panic!("writing stub {}: {e}", dst.display()));
+        std::fs::write(&dst, b"").unwrap_or_else(|e| panic!("writing stub {}: {e}", dst.display()));
         println!("cargo:rustc-env=SHANNON_EBPF_OBJ={}", dst.display());
         return;
     }
