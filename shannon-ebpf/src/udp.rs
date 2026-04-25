@@ -314,10 +314,13 @@ fn emit_udp_data(
             total_bytes,
             captured_len,
         };
+        // bpf_probe_read_kernel_buf instead of core::ptr::copy_* — see
+        // tcp.rs's emit for the verifier-rejection rationale.
         let dst = (*ev).payload.data.as_mut_ptr();
         let src = scratch.bytes.as_ptr();
         let n = (captured_len as usize).min(CAP);
-        core::ptr::copy_nonoverlapping(src, dst, n);
+        let dst_slice = core::slice::from_raw_parts_mut(dst, n);
+        let _ = bpf_probe_read_kernel_buf(src, dst_slice);
     }
     entry.submit(0);
 }

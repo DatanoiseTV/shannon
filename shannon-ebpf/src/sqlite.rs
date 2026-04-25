@@ -23,7 +23,11 @@
 //! arg 0. `nByte == -1` means "NUL-terminated"; we cap reads at
 //! [`SQLITE_TEXT_CAP`] either way.
 
-use aya_ebpf::{helpers::bpf_probe_read_user_buf, macros::uprobe, programs::ProbeContext};
+use aya_ebpf::{
+    helpers::{bpf_probe_read_kernel_buf, bpf_probe_read_user_buf},
+    macros::uprobe,
+    programs::ProbeContext,
+};
 
 use shannon_common::{EventKind, SqliteHeader, SQLITE_TEXT_CAP};
 
@@ -131,10 +135,13 @@ fn emit(db: u64, sql_ptr: u64, want: u32, sql_total: u32, api: u8) {
             sql_total_bytes: sql_total,
             captured_len,
         };
+        // bpf_probe_read_kernel_buf instead of core::ptr::copy_* — see
+        // tcp.rs's emit for the 5.15-verifier-rejection rationale.
         let dst = (*ev).payload.data.as_mut_ptr();
         let src = scratch.bytes.as_ptr();
         let ncopy = (captured_len as usize).min(CAP);
-        core::ptr::copy_nonoverlapping(src, dst, ncopy);
+        let dst_slice = core::slice::from_raw_parts_mut(dst, ncopy);
+        let _ = bpf_probe_read_kernel_buf(src, dst_slice);
     }
     entry.submit(0);
 }

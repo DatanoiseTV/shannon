@@ -23,7 +23,10 @@
 //! `shannon doctor`.
 
 use aya_ebpf::{
-    helpers::{bpf_get_current_pid_tgid, bpf_probe_read_kernel, bpf_probe_read_user_buf},
+    helpers::{
+        bpf_get_current_pid_tgid, bpf_probe_read_kernel, bpf_probe_read_kernel_buf,
+        bpf_probe_read_user_buf,
+    },
     macros::{kprobe, kretprobe, map},
     maps::HashMap,
     programs::{ProbeContext, RetProbeContext},
@@ -234,11 +237,17 @@ fn emit_tcp_data_from_buf(sk: u64, user_buf: u64, captured: u32, total_bytes: u3
             total_bytes,
             captured_len,
         };
-        // Copy captured bytes into the frame's data field.
+        // Copy captured bytes into the frame's data field. Use the
+        // bpf_probe_read_kernel helper rather than core::ptr::copy_*
+        // — the latter lowers to a manual byte loop on bpf-target,
+        // which 5.15's verifier walks symbolically and rejects with
+        // "instruction limit exceeded". The helper is one-shot and
+        // doesn't get unrolled.
         let dst = (*ev).payload.data.as_mut_ptr();
         let src = scratch.bytes.as_ptr();
         let n = (captured_len as usize).min(CAP);
-        core::ptr::copy_nonoverlapping(src, dst, n);
+        let dst_slice = core::slice::from_raw_parts_mut(dst, n);
+        let _ = bpf_probe_read_kernel_buf(src, dst_slice);
     }
     entry.submit(0);
 }
