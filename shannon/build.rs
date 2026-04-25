@@ -24,6 +24,21 @@ fn main() {
         "cargo:rerun-if-changed={}",
         ebpf_dir.join("Cargo.toml").display()
     );
+    println!("cargo:rerun-if-env-changed=SHANNON_SKIP_BPF");
+
+    // Escape hatch for consumers that only want the userspace library
+    // (fuzz harnesses, parser unit tests, downstream analysis tools).
+    // Skips the nightly + bpf-linker round-trip, emits an empty stub
+    // so `include_bytes!(env!("SHANNON_EBPF_OBJ"))` still compiles —
+    // the binary is just non-functional at runtime, which is fine for
+    // the lib-only use case.
+    if std::env::var_os("SHANNON_SKIP_BPF").is_some() {
+        let dst = out_dir.join("shannon-ebpf");
+        std::fs::write(&dst, b"")
+            .unwrap_or_else(|e| panic!("writing stub {}: {e}", dst.display()));
+        println!("cargo:rustc-env=SHANNON_EBPF_OBJ={}", dst.display());
+        return;
+    }
 
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".into());
 
