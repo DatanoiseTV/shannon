@@ -152,6 +152,32 @@ impl Runtime {
             }
         }
 
+        // Auto-discovered libs from /proc/*/maps. Picks up Snap /
+        // Flatpak bundles, container bind-mounts, custom installs in
+        // /opt or /home that the hardcoded candidate lists miss.
+        // Already-attached canonical paths are skipped silently inside
+        // the best-effort attachers (aya rejects double-attach with a
+        // clear error which we route to debug-level logs).
+        let (extra_ssl, extra_gnutls, extra_sqlite) = discover_loaded_libs();
+        for path in extra_ssl {
+            let n = attach_libssl_best_effort(&mut bpf, &path);
+            if n > 0 {
+                tracing::info!(path = %path.display(), syms = n, "attached libssl uprobes (auto)");
+            }
+        }
+        for path in extra_gnutls {
+            let n = attach_libgnutls_best_effort(&mut bpf, &path);
+            if n > 0 {
+                tracing::info!(path = %path.display(), syms = n, "attached libgnutls uprobes (auto)");
+            }
+        }
+        for path in extra_sqlite {
+            let n = attach_libsqlite3_best_effort(&mut bpf, &path);
+            if n > 0 {
+                tracing::info!(path = %path.display(), syms = n, "attached libsqlite3 uprobes (auto)");
+            }
+        }
+
         // Operator-supplied binaries (statically-linked libssl or
         // libsqlite3 targets, Go apps bundling their own TLS, …).
         // Best-effort per-symbol: binaries that only export one of
@@ -286,6 +312,77 @@ fn libssl_candidates() -> Vec<std::path::PathBuf> {
         }
     }
     out
+}
+
+/// Walk `/proc/*/maps` and collect every unique mapped library path that
+/// looks like one we know how to probe. Returns a triple of (libssl,
+/// libgnutls, libsqlite3) canonical paths — one entry per inode, so the
+/// caller can attach without per-version dedup.
+///
+/// Catches Snap / Flatpak / container bind-mounts / `/opt` installs that
+/// the hardcoded `lib*_candidates()` lists don't know about. Failures
+/// reading `/proc/<pid>/maps` (process exiting, permission denied for
+/// non-root readers of foreign PIDs) are silently skipped.
+#[allow(clippy::type_complexity)]
+fn discover_loaded_libs() -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
+    use std::collections::BTreeSet;
+    use std::path::PathBuf;
+    let mut ssl: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut gnutls: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut sqlite: BTreeSet<PathBuf> = BTreeSet::new();
+
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return (Vec::new(), Vec::new(), Vec::new());
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = match name.to_str() {
+            Some(s) => s,
+            None => continue,
+        };
+        if !name_str.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        let maps = entry.path().join("maps");
+        let Ok(content) = std::fs::read_to_string(&maps) else {
+            continue;
+        };
+        for line in content.lines() {
+            // Each line: "addr perms offset dev inode pathname"; pathname
+            // is everything after the last whitespace cluster, can contain
+            // spaces ("(deleted)" etc.). Splitting on whitespace n times
+            // is fine for our matching since we only need it to *contain*
+            // the substring.
+            let Some(path_str) = line.split_whitespace().nth(5) else {
+                continue;
+            };
+            // Skip pseudo-mappings.
+            if path_str.starts_with('[') || path_str == "(deleted)" {
+                continue;
+            }
+            let basename = path_str.rsplit('/').next().unwrap_or(path_str);
+            let kind = if basename.starts_with("libssl.so") {
+                Some(&mut ssl)
+            } else if basename.starts_with("libgnutls.so") {
+                Some(&mut gnutls)
+            } else if basename.starts_with("libsqlite3.so") {
+                Some(&mut sqlite)
+            } else {
+                None
+            };
+            if let Some(set) = kind {
+                let p = PathBuf::from(path_str);
+                if let Ok(canon) = p.canonicalize() {
+                    set.insert(canon);
+                }
+            }
+        }
+    }
+    (
+        ssl.into_iter().collect(),
+        gnutls.into_iter().collect(),
+        sqlite.into_iter().collect(),
+    )
 }
 
 fn attach_libssl(bpf: &mut Ebpf, path: &std::path::Path) -> Result<()> {
