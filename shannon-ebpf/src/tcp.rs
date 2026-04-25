@@ -36,7 +36,7 @@ use shannon_common::{EventKind, TcpDataHeader};
 
 use crate::{
     conn::Event,
-    maps::{EVENTS, SCRATCH, SOCKS},
+    maps::{bump_stat, EVENTS, SCRATCH, SOCKS},
     util,
 };
 
@@ -212,6 +212,7 @@ fn emit_tcp_data_from_buf(sk: u64, user_buf: u64, captured: u32, total_bytes: u3
     // unused tail with zeros. Fixed size keeps the verifier happy and the
     // overhead is acceptable at CAP = 4 KiB.
     let Some(mut entry) = EVENTS.reserve::<Event<TcpDataFrame>>(0) else {
+        bump_stat(shannon_common::STAT_EVENTS_DROPPED_RINGBUF);
         return;
     };
     let ev = entry.as_mut_ptr();
@@ -250,6 +251,7 @@ fn emit_tcp_data_from_buf(sk: u64, user_buf: u64, captured: u32, total_bytes: u3
         let _ = bpf_probe_read_kernel_buf(src, dst_slice);
     }
     entry.submit(0);
+    bump_stat(shannon_common::STAT_EVENTS_EMITTED);
 }
 
 /// Fixed-size payload for `tcp_sendmsg` / `tcp_recvmsg` events. Kept

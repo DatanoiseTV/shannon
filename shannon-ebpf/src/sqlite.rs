@@ -32,7 +32,7 @@ use aya_ebpf::{
 use shannon_common::{EventKind, SqliteHeader, SQLITE_TEXT_CAP};
 
 use crate::conn::Event;
-use crate::maps::{EVENTS, SCRATCH};
+use crate::maps::{bump_stat, EVENTS, SCRATCH};
 use crate::util;
 
 const CAP: usize = SQLITE_TEXT_CAP;
@@ -121,6 +121,7 @@ fn emit(db: u64, sql_ptr: u64, want: u32, sql_total: u32, api: u8) {
         + captured_len as usize;
 
     let Some(mut entry) = EVENTS.reserve::<Event<SqliteFrame>>(0) else {
+        bump_stat(shannon_common::STAT_EVENTS_DROPPED_RINGBUF);
         return;
     };
     let ev = entry.as_mut_ptr();
@@ -144,6 +145,7 @@ fn emit(db: u64, sql_ptr: u64, want: u32, sql_total: u32, api: u8) {
         let _ = bpf_probe_read_kernel_buf(src, dst_slice);
     }
     entry.submit(0);
+    bump_stat(shannon_common::STAT_EVENTS_EMITTED);
 }
 
 /// Fixed-size payload mirror; matches the reservation size the BPF

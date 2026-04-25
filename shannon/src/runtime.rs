@@ -55,6 +55,9 @@ pub struct FilterSetup {
     /// Extra binary paths to attach libssl / libsqlite3 uprobes to.
     /// Per-symbol best-effort — missing symbols silently skip.
     pub attach_bins: Vec<std::path::PathBuf>,
+    /// When set, spawn a Prometheus exporter on this address so
+    /// operators can scrape BPF-side counters.
+    pub metrics_listen: Option<std::net::SocketAddr>,
 }
 
 impl Runtime {
@@ -193,6 +196,15 @@ impl Runtime {
                 sqlite_syms = loaded_sqlite,
                 "attached uprobes to user-specified binary",
             );
+        }
+
+        // Optional metrics exporter. Take the STATS map handle BEFORE
+        // the ringbuf reader spawn — `take_map` mutates the bpf
+        // instance and must happen before any later access.
+        if let Some(addr) = filter.metrics_listen {
+            let reader = crate::metrics::StatsReader::from_bpf(&mut bpf)?;
+            let shared = Arc::new(parking_lot::Mutex::new(reader));
+            crate::metrics::serve(shared, addr)?;
         }
 
         // Spin up the ring-buffer reader.

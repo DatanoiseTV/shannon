@@ -51,6 +51,12 @@ pub struct Cli {
     #[arg(long, global = true, hide = true)]
     pub bpf_log: bool,
 
+    /// Serve Prometheus metrics (`/metrics`) on this address. Default
+    /// off; passing e.g. `127.0.0.1:9750` exposes shannon's BPF-side
+    /// counters (events emitted, ringbuffer drops, filter drops).
+    #[arg(long, global = true, value_name = "ADDR")]
+    pub metrics_listen: Option<std::net::SocketAddr>,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }

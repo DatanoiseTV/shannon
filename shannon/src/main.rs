@@ -25,6 +25,7 @@ mod graphql;
 mod llm;
 mod llm_client;
 mod logging;
+mod metrics;
 mod ntlm;
 mod parsers;
 mod pcap;

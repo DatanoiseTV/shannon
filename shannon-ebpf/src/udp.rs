@@ -61,7 +61,7 @@ use aya_ebpf::{
 use shannon_common::{EventKind, TcpDataHeader};
 
 use crate::conn::Event;
-use crate::maps::{EVENTS, SCRATCH};
+use crate::maps::{bump_stat, EVENTS, SCRATCH};
 use crate::tcp::{resolve_iovec, Direction, TcpDataFrame};
 use crate::util;
 
@@ -294,6 +294,7 @@ fn emit_udp_data(
         + captured_len as usize;
 
     let Some(mut entry) = EVENTS.reserve::<Event<TcpDataFrame>>(0) else {
+        bump_stat(shannon_common::STAT_EVENTS_DROPPED_RINGBUF);
         return;
     };
     let ev = entry.as_mut_ptr();
@@ -323,6 +324,7 @@ fn emit_udp_data(
         let _ = bpf_probe_read_kernel_buf(src, dst_slice);
     }
     entry.submit(0);
+    bump_stat(shannon_common::STAT_EVENTS_EMITTED);
 }
 
 #[inline(always)]

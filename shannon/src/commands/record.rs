@@ -19,18 +19,20 @@ use crate::cli::{Cli, RecordArgs, RecordCompression, RecordFormat};
 use crate::events::{DecodedEvent, Direction};
 use crate::runtime::{FilterSetup, Runtime};
 
-pub fn run(_cli: &Cli, args: RecordArgs) -> Result<()> {
+pub fn run(cli: &Cli, args: RecordArgs) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    rt.block_on(async move { run_async(args).await })
+    let metrics = cli.metrics_listen;
+    rt.block_on(async move { run_async(args, metrics).await })
 }
 
-async fn run_async(args: RecordArgs) -> Result<()> {
+async fn run_async(args: RecordArgs, metrics_listen: Option<std::net::SocketAddr>) -> Result<()> {
     let filter = FilterSetup {
         pids: args.filter.pid.clone(),
         follow_children: args.filter.follow_children,
         attach_bins: args.filter.attach_bin.clone(),
+        metrics_listen,
     };
     let mut runtime = Runtime::start_with(&filter)?;
 

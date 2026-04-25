@@ -22,7 +22,7 @@ use aya_ebpf::{
 use shannon_common::{EventHeader, EventKind, TlsDataHeader, TlsLib};
 
 use crate::{
-    maps::{EVENTS, SCRATCH},
+    maps::{bump_stat, EVENTS, SCRATCH},
     util,
 };
 
@@ -289,6 +289,7 @@ fn emit_tls_data(ssl: u64, buf: u64, captured: u32, total: u32, dir: Direction, 
     let total_len = size_of::<EventHeader>() + size_of::<TlsDataHeader>() + captured_len as usize;
 
     let Some(mut entry) = EVENTS.reserve::<TlsFrame>(0) else {
+        bump_stat(shannon_common::STAT_EVENTS_DROPPED_RINGBUF);
         return;
     };
     unsafe {
@@ -315,4 +316,5 @@ fn emit_tls_data(ssl: u64, buf: u64, captured: u32, total: u32, dir: Direction, 
         let _ = bpf_probe_read_kernel_buf(src, dst_slice);
     }
     entry.submit(0);
+    bump_stat(shannon_common::STAT_EVENTS_EMITTED);
 }

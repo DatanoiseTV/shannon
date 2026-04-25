@@ -24,18 +24,20 @@ use crate::runtime::{FilterSetup, Runtime};
 use crate::secrets;
 use crate::warnings;
 
-pub fn run(_cli: &Cli, args: TraceArgs) -> Result<()> {
+pub fn run(cli: &Cli, args: TraceArgs) -> Result<()> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    rt.block_on(async move { run_async(args).await })
+    let metrics = cli.metrics_listen;
+    rt.block_on(async move { run_async(args, metrics).await })
 }
 
-async fn run_async(args: TraceArgs) -> Result<()> {
+async fn run_async(args: TraceArgs, metrics_listen: Option<std::net::SocketAddr>) -> Result<()> {
     let filter = FilterSetup {
         pids: args.filter.pid.clone(),
         follow_children: args.filter.follow_children,
         attach_bins: args.filter.attach_bin.clone(),
+        metrics_listen,
     };
     // Replay path skips the BPF attach entirely — events come from a
     // recording file instead of the kernel ring buffer.

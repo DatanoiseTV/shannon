@@ -48,6 +48,35 @@ pub const COMM_LEN: usize = 16;
 /// Maximum bytes of an exec filename we forward.
 pub const FILENAME_CAP: usize = 256;
 
+// --- Self-observability counters --------------------------------------------
+//
+// Slot indices into the `STATS` PerCpuArray. Both the BPF programs and
+// the userspace exporter index by these constants — keep them in sync
+// or the metric labels lie. Append at the end; never renumber.
+
+pub const STAT_EVENTS_EMITTED: u32 = 0;
+pub const STAT_EVENTS_DROPPED_RINGBUF: u32 = 1;
+pub const STAT_EVENTS_DROPPED_FILTER: u32 = 2;
+pub const STAT_EVENTS_DROPPED_OOM: u32 = 3;
+
+/// Number of entries in the STATS map. Bump when adding a slot above.
+pub const STAT_SLOTS: u32 = 4;
+
+/// Human-readable label for a stat slot, used as the Prometheus
+/// counter `name` attribute. Returns "unknown" for indices outside
+/// the table so a future BPF version that bumps STAT_SLOTS without
+/// rebuilding userspace doesn't crash the exporter.
+#[must_use]
+pub const fn stat_label(idx: u32) -> &'static str {
+    match idx {
+        STAT_EVENTS_EMITTED => "shannon_events_emitted_total",
+        STAT_EVENTS_DROPPED_RINGBUF => "shannon_events_dropped_ringbuf_total",
+        STAT_EVENTS_DROPPED_FILTER => "shannon_events_dropped_filter_total",
+        STAT_EVENTS_DROPPED_OOM => "shannon_events_dropped_oom_total",
+        _ => "shannon_unknown_total",
+    }
+}
+
 /// Maximum bytes of an argv vector we forward.
 pub const ARGV_CAP: usize = 2048;
 

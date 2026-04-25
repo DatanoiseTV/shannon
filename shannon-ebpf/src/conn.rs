@@ -24,7 +24,7 @@ use aya_ebpf::{
 use shannon_common::{ConnEndPayload, ConnStartPayload, EventKind, COMM_LEN, HEADER_SIZE};
 
 use crate::{
-    maps::{SockInfo, EVENTS, SOCKS},
+    maps::{bump_stat, SockInfo, EVENTS, SOCKS},
     util,
 };
 
@@ -237,6 +237,7 @@ fn emit_conn_start(
     comm: [u8; COMM_LEN],
 ) {
     let Some(mut entry) = EVENTS.reserve::<Event<ConnStartPayload>>(0) else {
+        bump_stat(shannon_common::STAT_EVENTS_DROPPED_RINGBUF);
         return;
     };
     let ev = entry.as_mut_ptr();
@@ -261,11 +262,13 @@ fn emit_conn_start(
         };
     }
     entry.submit(0);
+    bump_stat(shannon_common::STAT_EVENTS_EMITTED);
 }
 
 fn emit_conn_end(sock_id: u64) {
     let info = unsafe { SOCKS.get(&sock_id) }.copied();
     let Some(mut entry) = EVENTS.reserve::<Event<ConnEndPayload>>(0) else {
+        bump_stat(shannon_common::STAT_EVENTS_DROPPED_RINGBUF);
         return;
     };
     let ev = entry.as_mut_ptr();
@@ -289,6 +292,7 @@ fn emit_conn_end(sock_id: u64) {
         };
     }
     entry.submit(0);
+    bump_stat(shannon_common::STAT_EVENTS_EMITTED);
 }
 
 /// Small generic to keep `emit_conn_*` tidy.

@@ -64,3 +64,19 @@ pub static CGROUP_FILTER: HashMap<u64, u8> = HashMap::with_max_entries(1024, BPF
 /// default.
 #[map]
 pub static SELF_PID: HashMap<u32, u8> = HashMap::with_max_entries(1, BPF_F_NO_PREALLOC);
+
+/// Self-observability counters. Per-CPU u64 array indexed by the
+/// `STAT_*` constants in `shannon_common`. Userspace sums across CPUs
+/// and exposes the result as Prometheus counters.
+#[map]
+pub static STATS: PerCpuArray<u64> = PerCpuArray::with_max_entries(shannon_common::STAT_SLOTS, 0);
+
+/// Bump a per-CPU stat slot by one. The aya helper returns `None` only
+/// when the index is out of range; we silently ignore so a counter
+/// miscount can never crash the BPF program.
+#[inline(always)]
+pub fn bump_stat(idx: u32) {
+    if let Some(slot) = STATS.get_ptr_mut(idx) {
+        unsafe { *slot += 1 };
+    }
+}
