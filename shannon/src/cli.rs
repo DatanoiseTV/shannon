@@ -601,8 +601,7 @@ pub fn print_completions(shell: Shell) -> anyhow::Result<()> {
 pub fn generate_manpages(out_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     use anyhow::Context;
     use clap::CommandFactory;
-    std::fs::create_dir_all(out_dir)
-        .with_context(|| format!("creating {}", out_dir.display()))?;
+    std::fs::create_dir_all(out_dir).with_context(|| format!("creating {}", out_dir.display()))?;
     let cmd = Cli::command();
     let mut written = Vec::new();
     write_one(&cmd, "shannon", out_dir, &mut written)?;
