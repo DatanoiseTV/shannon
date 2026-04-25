@@ -86,8 +86,17 @@ jobs:
       matrix:
         # lvh ships prebuilt kernel images at quay.io/lvh-images/kind:<ver>.
         # Pinned to versions we want to support — bump when distros update.
-        # lvh ships these as -main suffixed images at quay.io/lvh-images/kind.
-        kernel: ['5.15-main', '6.1-main', '6.6-main', '6.12-main']
+        # Use timestamped tags, not the `-main` ones — lvh v0.0.29's
+        # action strips `-main` when extracting the qcow2 but appends
+        # it again when invoking `lvh run`, so booting a `-main` tag
+        # always fails with a filename mismatch. Timestamped tags
+        # round-trip cleanly. Bumped manually; cilium uses Renovate
+        # with `datasource=docker depName=quay.io/lvh-images/kind`.
+        kernel:
+          - '5.15-20260420.013556'
+          - '6.1-20260420.013556'
+          - '6.6-20260420.013556'
+          - '6.12-20260420.013556'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
