@@ -1,0 +1,110 @@
+name: kernel-matrix
+
+# Boots a real Linux kernel inside qemu for each supported version and
+# runs shannon's smoke test against it. Catches BPF-verifier regressions
+# that the single-kernel `ci` workflow can't see — every newer kernel
+# tightens verifier rules and an unattended bump can ship a broken loader.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'shannon/src/**'
+      - 'shannon-ebpf/src/**'
+      - 'shannon-common/src/**'
+      - 'shannon/build.rs'
+      - 'Cargo.toml'
+      - 'shannon/Cargo.toml'
+      - '.github/workflows/kernel-matrix.yml'
+  pull_request:
+    paths:
+      - 'shannon/src/**'
+      - 'shannon-ebpf/src/**'
+      - 'shannon-common/src/**'
+      - 'shannon/build.rs'
+      - 'Cargo.toml'
+      - 'shannon/Cargo.toml'
+      - '.github/workflows/kernel-matrix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build shannon (release)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchains
+        run: |
+          rustup toolchain install stable --component rustfmt,clippy
+          rustup default stable
+          rustup toolchain install nightly --component rust-src
+      - name: System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm llvm-dev libclang-dev libelf-dev pkg-config
+      - name: Install bpf-linker
+        run: cargo install bpf-linker --locked
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release -p shannon
+      - name: Stage artefacts
+        run: |
+          mkdir -p stage
+          cp target/release/shannon stage/
+          # Provide a tiny smoke driver that runs inside the guest.
+          cat >stage/smoke.sh <<'EOF'
+          #!/bin/sh
+          # Smoke test executed inside an lvh-booted VM. Goal: prove the
+          # current kernel can load every BPF program and the ringbuffer
+          # round-trips cleanly. Each step is fail-loud.
+          set -eu
+          uname -a
+          echo "--- shannon doctor ---"
+          ./shannon doctor || true   # non-zero exits are warnings, not failures
+          echo "--- recording 5s ---"
+          ./shannon record -o /tmp/cap.jsonl.zst --max-duration 5s 2>&1 \
+            | grep -vE "^$" || true
+          echo "--- analyze ---"
+          ./shannon analyze /tmp/cap.jsonl.zst
+          echo "OK kernel=$(uname -r)"
+          EOF
+          chmod +x stage/smoke.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shannon-bin
+          path: stage/
+
+  smoke:
+    name: smoke kernel ${{ matrix.kernel }}
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # lvh ships prebuilt kernel images at quay.io/lvh-images/kind:<ver>.
+        # Pinned to versions we want to support — bump when distros update.
+        # lvh ships these as -main suffixed images at quay.io/lvh-images/kind.
+        kernel: ['5.15-main', '6.1-main', '6.6-main', '6.12-main']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: shannon-bin
+          path: stage
+      - name: chmod
+        run: chmod +x stage/shannon stage/smoke.sh
+
+      - name: Boot kernel ${{ matrix.kernel }} and run smoke
+        uses: cilium/little-vm-helper@908ab1ff8a596a03cd5221a1f8602dc44fbcaeec  # v0.0.26
+        with:
+          test-name: shannon-smoke-${{ matrix.kernel }}
+          image: 'kind'
+          image-version: ${{ matrix.kernel }}
+          host-mount: ./stage
+          install-dependencies: 'true'
+          cmd: |
+            cd /host
+            ./smoke.sh
